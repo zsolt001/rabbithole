@@ -42,6 +42,30 @@ try {
   const foreignHost = await request(`${session.url}/health`, { Host: `attacker.example:${port}` });
   assert.equal(foreignHost.status, 403);
   assert.equal(foreignHost.json.error.code, "forbidden_host");
+
+  // A bare cross-origin GET carries no Origin header, so the Origin allowlist
+  // alone cannot see it. A hostile page pulling content routes via <img> /
+  // <iframe> / fetch is stamped by the browser with a cross-origin
+  // Sec-Fetch-Site, which content routes must reject.
+  const crossSiteSnapshot = await httpGet(`${session.url}/snapshot-hole`, { "Sec-Fetch-Site": "cross-site" });
+  assert.equal(crossSiteSnapshot.status, 403);
+  assert.equal(JSON.parse(crossSiteSnapshot.body).error.code, "forbidden_cross_origin");
+
+  const sameSiteExport = await httpGet(`${session.url}/export`, { "Sec-Fetch-Site": "same-site" });
+  assert.equal(sameSiteExport.status, 403);
+
+  // The app's own requests are same-origin, and non-browser clients (and
+  // browsers too old for Fetch Metadata) omit the header; both must still reach
+  // the content.
+  const sameOriginSnapshot = await httpGet(`${session.url}/snapshot-hole`, { "Sec-Fetch-Site": "same-origin" });
+  assert.equal(sameOriginSnapshot.status, 200);
+  const headerlessSnapshot = await httpGet(`${session.url}/snapshot-hole`, {});
+  assert.equal(headerlessSnapshot.status, 200);
+
+  // The top-level page shell is exempt so the app always renders, even when a
+  // cross-origin link opens it; the shell carries no document content.
+  const crossSitePage = await httpGet(`${session.url}/`, { "Sec-Fetch-Site": "cross-site" });
+  assert.equal(crossSitePage.status, 200);
 } finally {
   await session.close("test_complete");
   await fs.rm(process.env.RABBITHOLE_DIR, { recursive: true, force: true });
@@ -56,6 +80,20 @@ function request(url, headers) {
       res.setEncoding("utf8");
       res.on("data", (chunk) => { body += chunk; });
       res.on("end", () => resolve({ status: res.statusCode, json: JSON.parse(body) }));
+    });
+    req.once("error", reject);
+  });
+}
+
+// Raw GET that returns the body verbatim: Sec-Fetch-* are forbidden header
+// names for fetch(), and content routes answer with HTML, not JSON.
+function httpGet(url, headers) {
+  return new Promise((resolve, reject) => {
+    const req = http.get(url, { headers }, (res) => {
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => { body += chunk; });
+      res.on("end", () => resolve({ status: res.statusCode, body }));
     });
     req.once("error", reject);
   });

@@ -156,8 +156,15 @@ export class SessionBase {
     const server = http.createServer(async (req, res) => {
       try {
         const port = req.socket.localPort;
+        // Every route but the top-level page shell serves document content or
+        // mutates state, so all of them reject cross-origin browser fetches.
+        // The shell (GET / or /index.html) is exempt so a cross-origin link can
+        // still open the app; it carries no document content of its own.
+        const pathname = new URL(req.url || "/", "http://127.0.0.1").pathname;
+        const isPageShell = req.method === "GET" && (pathname === "/" || pathname === "/index.html");
         assertHttpRequest(req, {
           allowedHosts: new Set([`127.0.0.1:${port}`, `localhost:${port}`]),
+          requireSameOriginFetch: !isPageShell,
         });
         await this.handleRequest(req, res);
       } catch (error) {
