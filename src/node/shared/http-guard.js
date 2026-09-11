@@ -30,6 +30,7 @@ export function isAllowedBrowserOrigin(origin) {
  *   allowedHosts: ReadonlySet<string>,
  *   isAllowedOrigin?: (origin: string) => boolean,
  *   requireOrigin?: boolean,
+ *   requireSameOriginFetch?: boolean,
  *   authorize?: (authorization: string | undefined) => boolean,
  *   error?: (message: string, code: string, statusCode: number) => Error
  * }} policy
@@ -38,6 +39,7 @@ export function assertHttpRequest(req, {
   allowedHosts,
   isAllowedOrigin = isAllowedBrowserOrigin,
   requireOrigin = false,
+  requireSameOriginFetch = false,
   authorize,
   error = (message, code, statusCode) => new HttpGuardError(message, code, statusCode),
 }) {
@@ -48,6 +50,19 @@ export function assertHttpRequest(req, {
   const origin = req.headers.origin;
   if ((requireOrigin && origin === undefined) || (origin !== undefined && !isAllowedOrigin(origin))) {
     throw error("Request Origin is forbidden.", "forbidden_origin", 403);
+  }
+
+  // A bare cross-origin GET (a hostile page's <img>/<iframe>/no-cors fetch)
+  // carries no Origin header, so the allowlist above cannot see it. Fetch
+  // Metadata does: the browser stamps such requests with a cross-origin
+  // Sec-Fetch-Site. Reject those; the app's own same-origin requests, a
+  // user-initiated navigation ("none"), and non-browser or pre-Fetch-Metadata
+  // clients (header absent) all pass, so nothing legitimate breaks.
+  if (requireSameOriginFetch) {
+    const site = req.headers["sec-fetch-site"];
+    if (site === "cross-site" || site === "same-site") {
+      throw error("Request cross-origin fetch is forbidden.", "forbidden_cross_origin", 403);
+    }
   }
 
   if (authorize && !authorize(req.headers.authorization)) {
