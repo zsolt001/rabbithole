@@ -24,7 +24,12 @@ function holesDir() {
 
 async function ensureDir() {
   const dir = holesDir();
-  await fs.mkdir(dir, { recursive: true });
+  // The store holds every persisted document; keep it private to the owner so
+  // a co-resident local account cannot read another user's holes. mkdir's mode
+  // only applies to dirs it creates, so chmod fixes an existing loose dir too
+  // (mirrors the bridge token dir).
+  await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+  await fs.chmod(dir, 0o700).catch(() => {});
   return dir;
 }
 
