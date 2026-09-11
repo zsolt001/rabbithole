@@ -71,7 +71,7 @@
     "highlight.js": "^11.11.1",
     "katex": "^0.17.0",
     "marked": "^15.0.7",
-    "pdfjs-dist": "^4.0.379",
+    "pdfjs-dist": "^4.10.38",
     "zod": "^3.24.2"
   },
   "engines": {
