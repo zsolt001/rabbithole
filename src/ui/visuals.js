@@ -109,12 +109,31 @@ export function registerBlockMount(type, mountSpec) {
   }
   blockMounts[key] = mountSpec;
 }
+/**
+ * DOMPurify keeps <style> for show/mermaid content but does not parse the CSS
+ * inside it, so `url(https://tracker/…)` or an `@import` in a sanitized style
+ * block is a passive "document opened" beacon that fires on render. Empty every
+ * network-reaching url() target and drop every @import, while preserving local
+ * url(#id) references (mermaid markers/gradients).
+ */
+export function stripStyleNetworkRefs(css) {
+  return String(css ?? "")
+    .replace(/@import\b[^;]*;?/gi, "")
+    .replace(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi, (match, _quote, target) =>
+      target.trim().startsWith("#") ? match : "url()",
+    );
+}
 function ensureVisualSanitizer() {
   const purifier = window.DOMPurify;
   if (!purifier || typeof purifier.sanitize !== "function") throw new Error("DOMPurify is unavailable");
   if (!visualHooksReady && typeof purifier.addHook === "function") {
     purifier.addHook("uponSanitizeAttribute", function (node, data) {
       if (data && data.attrName && /^on/i.test(data.attrName)) data.keepAttr = false;
+    });
+    purifier.addHook("uponSanitizeElement", function (node, data) {
+      if (data && data.tagName === "style" && node && typeof node.textContent === "string") {
+        node.textContent = stripStyleNetworkRefs(node.textContent);
+      }
     });
     visualHooksReady = true;
   }
