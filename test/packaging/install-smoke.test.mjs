@@ -280,6 +280,10 @@ try {
       RABBITHOLE_DIR: dataDir,
       RABBITHOLE_BRIDGE_CLAUDE_BIN: path.join(ROOT, "test/integration/fixtures/fake-claude.mjs"),
       RABBITHOLE_BRIDGE_CODEX_BIN: path.join(ROOT, "test/integration/fixtures/fake-codex.mjs"),
+      // Off a TTY the bridge withholds the pairing token from stdout/stderr so
+      // captured logs never persist the bearer; a headless consumer that needs
+      // it (like this harness) opts back in explicitly.
+      RABBITHOLE_BRIDGE_EMIT_TOKEN: "1",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
