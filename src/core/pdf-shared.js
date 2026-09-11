@@ -300,6 +300,39 @@ export async function extractPdfPageLines(page) {
   return orderLinesForReading(clusterTextLines(content?.items || []), view[2] - view[0]).map((line) => ({ text: line.text }));
 }
 
+/**
+ * Reconstruct the per-span geometry pdf.js keeps on a private field of its
+ * TextLayer instance. pdf.js 4.10 removed the standalone renderTextLayer /
+ * updateTextLayer functions (and no longer exposes textDivProperties), but the
+ * reader still needs {angle, canvasWidth, fontSize} per text item to tune
+ * letter/word spacing and to skip rotated spans during native-selection
+ * calibration. The math mirrors TextLayer#appendText: the page transform is a
+ * pure Y-flip, so tx = [a, -b, c, -d] for a content item transform [a,b,c,d].
+ * @param {{ str?: unknown, width?: unknown, height?: unknown, transform?: unknown }} item
+ * @param {{ vertical?: boolean }} [style]
+ * @returns {{ angle: number, canvasWidth: number, fontSize: number }}
+ */
+export function pdfTextDivProperties(item, style = {}) {
+  const transform = Array.isArray(item?.transform) ? item.transform : [];
+  const a = Number(transform[0]) || 0;
+  const b = Number(transform[1]) || 0;
+  const c = Number(transform[2]) || 0;
+  const d = Number(transform[3]) || 0;
+  const vertical = !!style?.vertical;
+  let angle = Math.atan2(-b, a);
+  if (vertical) angle += Math.PI / 2;
+  const fontSize = Math.hypot(c, d);
+  const str = typeof item?.str === "string" ? item.str : "";
+  let shouldScale = str.length > 1;
+  if (!shouldScale && str !== " " && a !== d) {
+    const absA = Math.abs(a);
+    const absD = Math.abs(d);
+    if (absA !== absD && Math.max(absA, absD) / Math.min(absA, absD) > 1.5) shouldScale = true;
+  }
+  const canvasWidth = shouldScale ? Number(vertical ? item?.height : item?.width) || 0 : 0;
+  return { angle: angle === 0 ? 0 : angle * (180 / Math.PI), canvasWidth, fontSize };
+}
+
 /** Metadata used by every renderer and coordinate conversion. */
 /** @param {any} page @param {number} [pageNumber] */
 export function pdfPageMetadata(page, pageNumber = page?.pageNumber) {

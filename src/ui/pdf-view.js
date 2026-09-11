@@ -1,16 +1,10 @@
 import { isNoteNode, isReactionNote } from "../core/hole/ask.js";
 import { iconSvg } from "../core/html/icons.js";
-import { normalizePdfExtension } from "../core/pdf-shared.js";
+import { normalizePdfExtension, pdfTextDivProperties } from "../core/pdf-shared.js";
 import { showAskFromSelection } from "./ask-followups.js";
 import { childrenOf, postBrowserEvent } from "./core.js";
 import { createCleanupScope } from "./kit/scope.js";
-import {
-  acquirePdfDocument,
-  pdfAnnotationModeDisabled,
-  pdfShowTextOpcode,
-  renderPdfTextLayer,
-  updatePdfTextLayer,
-} from "./pdf-runtime.js";
+import { acquirePdfDocument, createPdfTextLayer, pdfAnnotationModeDisabled, pdfShowTextOpcode } from "./pdf-runtime.js";
 import { resolveAssetUrl } from "./renderer.js";
 import { mountPdfRectMark } from "./text-marks.js";
 
@@ -181,23 +175,18 @@ export function mountPdfView(container, node, options = {}) {
     const key = `${state.viewport.scale}:${state.viewport.rotation}`;
     if (state.textKey === key) return;
     state.textLayer.style.setProperty("--scale-factor", String(state.viewport.scale));
-    if (state.textKey && state.textDivs.length && state.textProperties) {
-      // PDF.js can reproject the existing spans. Keeping the same DOM nodes
-      // avoids a full text-layer rebuild on every zoom and preserves an active
-      // native selection while its geometry changes.
-      updatePdfTextLayer({
-        container: state.textLayer,
-        viewport: state.viewport,
-        textDivs: state.textDivs,
-        textDivProperties: state.textProperties,
-      });
+    if (state.textKey && state.textLayerInstance && state.textDivs.length && state.textProperties) {
+      // PDF.js reprojects the existing spans in place. Keeping the same DOM
+      // nodes avoids a full text-layer rebuild on every zoom and preserves an
+      // active native selection while its geometry changes.
+      state.textLayerInstance.update({ viewport: state.viewport });
       tuneTextLayerSpacing(state.textDivs, state.textItems, state.textStyles, state.textProperties, state.viewport);
       state.textKey = key;
       return;
     }
     const generation = ++state.textGeneration;
-    state.textTask?.cancel?.();
-    state.textTask = null;
+    state.textLayerInstance?.cancel?.();
+    state.textLayerInstance = null;
     state.textLayer.replaceChildren();
     const [content, operatorList] = await Promise.all([
       state.textContent || (state.textContentPromise ||= state.page.getTextContent({ includeMarkedContent: true })),
@@ -210,30 +199,37 @@ export function mountPdfView(container, node, options = {}) {
     state.textMetrics = exactTextItemMetrics(state.textItems, operatorList, pdfShowTextOpcode());
     await useEmbeddedTextLayerFonts(state.page, state.textItems, state.textStyles);
     if (disposed || state.textGeneration !== generation) return;
-    state.textDivs = [];
-    state.textProperties = new WeakMap();
-    const task = renderPdfTextLayer({
+    const textLayer = createPdfTextLayer({
       textContentSource: content,
       container: state.textLayer,
       viewport: state.viewport,
-      textDivs: state.textDivs,
-      textDivProperties: state.textProperties,
-      textContentItemsStr: [],
     });
-    state.textTask = task;
+    state.textLayerInstance = textLayer;
     try {
-      await task.promise;
+      await textLayer.render();
     } catch (error) {
       if (error?.name !== "AbortException") throw error;
     }
-    if (disposed || state.textGeneration !== generation || state.textTask !== task) return;
+    if (disposed || state.textGeneration !== generation || state.textLayerInstance !== textLayer) return;
+    // PDF.js 4.x keeps the per-span {angle, canvasWidth, fontSize} on a private
+    // field, so rebuild the map the spacing/selection code depends on from the
+    // same content items, keyed by the spans PDF.js just produced.
+    state.textDivs = textLayer.textDivs;
+    state.textProperties = new WeakMap();
+    for (let index = 0; index < state.textDivs.length; index++) {
+      const item = state.textItems[index];
+      if (item)
+        state.textProperties.set(
+          state.textDivs[index],
+          pdfTextDivProperties(item, state.textStyles[item.fontName] || {}),
+        );
+    }
     tuneTextLayerSpacing(state.textDivs, state.textItems, state.textStyles, state.textProperties, state.viewport);
     let itemIndex = 0;
     for (const span of state.textDivs) {
       span.dataset.pdfItem = String(itemIndex++);
     }
     state.textKey = key;
-    state.textTask = null;
   }
 
   async function renderPageTiles(state) {
@@ -728,7 +724,7 @@ export function mountPdfView(container, node, options = {}) {
         textStyles: {},
         textMetrics: [],
         textDivs: [],
-        textTask: null,
+        textLayerInstance: null,
         textGeneration: 0,
         textKey: "",
         renderTasks: new Set(),
@@ -826,7 +822,7 @@ export function mountPdfView(container, node, options = {}) {
     if (zoomFrame) cancelAnimationFrame(zoomFrame);
     scope.dispose();
     for (const state of pageStates) {
-      state.textTask?.cancel?.();
+      state.textLayerInstance?.cancel?.();
       cancelRenderTasks(state);
       state.page?.cleanup?.();
       for (const generation of [...state.canvasLayer.children]) releaseGeneration(generation);

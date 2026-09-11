@@ -148,14 +148,17 @@ function runtimeCanvasFactoryOption() {
   };
 }
 
-export function renderPdfTextLayer(params) {
+/**
+ * pdf.js 4.x replaced the standalone renderTextLayer/updateTextLayer functions
+ * with a TextLayer class: `new TextLayer({textContentSource, container,
+ * viewport})`, then `render()` once and `update({viewport})` on every zoom.
+ * The instance owns `textDivs` and reprojects those same nodes in place, which
+ * is what keeps a live selection alive across a zoom.
+ * @param {{ textContentSource: any, container: Element, viewport: any }} params
+ */
+export function createPdfTextLayer(params) {
   if (!pdfjs) throw new Error("PDF.js is not loaded");
-  return pdfjs.renderTextLayer(params);
-}
-
-export function updatePdfTextLayer(params) {
-  if (!pdfjs) throw new Error("PDF.js is not loaded");
-  return pdfjs.updateTextLayer(params);
+  return new pdfjs.TextLayer(params);
 }
 
 export function pdfAnnotationModeDisabled() {
