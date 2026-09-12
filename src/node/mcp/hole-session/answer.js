@@ -197,6 +197,12 @@ export class SessionAnswer extends SessionBroadcast {
     this.broadcast(buildNodeAnsweredEvent(this.nodes.get(node.id)));
     this.delivered.add(node.id);
     this.requests.answer(requestId, node.id);
+    if (getOpencodeDriver().isActive()) {
+      // Same cancellation hazard as the branch-answer tail above: in push mode
+      // there is no waiter to re-arm, so blocking here would hang until an
+      // OpenCode step boundary aborts the call.
+      return { ok: true, node_id: node.id, request_id: requestId, completed: true };
+    }
     return this.waitForEvent(signal);
   }
 
