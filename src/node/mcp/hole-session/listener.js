@@ -1,6 +1,7 @@
 import { buildMap, buildUndeliveredThread, collectBranchNotes, collectNewNotes } from "../../../core/hole/context.js";
 import { openBrowser } from "../../shared/process.js";
-import { log } from "../../shared/logger.js";
+import { log, error as logError } from "../../shared/logger.js";
+import { getOpencodeDriver } from "../opencode-driver.js";
 import { noteHashesForNodes, notesFromContextEntries, recordDeliveredNoteEntries } from "../note-hashes.js";
 import { SessionBase } from "./session-base.js";
 
@@ -65,6 +66,19 @@ export class SessionListener extends SessionBase {
       this.waiter = null;
       waiter.cleanup?.();
       waiter.resolve(this.deliverToAgent(event));
+      return;
+    }
+    // Push mode: no waiter will ever arrive (open/resume never call
+    // waitForEvent), so a branch that just queued here would sit forever.
+    // Hand it to the driver instead, which composes a prompt from the same
+    // deliverToAgent projection the blocking path uses and injects it into
+    // the agent's live OpenCode session.
+    const driver = getOpencodeDriver();
+    if (driver.isActive() && event.status === "branch_request") {
+      if (event.node_id) this.queuedNodeIds.add(event.node_id);
+      driver.driveBranch(this, this.deliverToAgent(event)).catch((error) => {
+        logError(`OpenCode driveBranch failed for request ${event.request_id}: ${error.message}`);
+      });
       return;
     }
     this.queue.push(event);
