@@ -170,7 +170,9 @@ export class SessionAnswer extends SessionBroadcast {
       // Push mode never re-arms waitForEvent (there is no waiter to re-arm —
       // branches are driven into the agent's live OpenCode session instead),
       // so a plain, non-delegated final also returns immediately here.
-      return { ok: true, node_id: finalNode.id, request_id: requestId, completed: true, delegated: true };
+      // delegated is true only when this request actually was delegated to a
+      // sub-agent (nonBlocking) — a plain push-mode final delegated nothing.
+      return { ok: true, node_id: finalNode.id, request_id: requestId, completed: true, ...(nonBlocking ? { delegated: true } : {}) };
     }
     return this.waitForEvent(signal);
   }
