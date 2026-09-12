@@ -47,6 +47,18 @@ const MAX_SCAN_KEYS = 200;
 const IDLE_EVENT_TYPES = new Set(["session.idle", "idle"]);
 
 /**
+ * The driver only ever reads `.ok`, `.status`, and (for the event stream)
+ * `.body` off a fetch response — narrower than `typeof fetch`'s full
+ * `Promise<Response>` so a test double doesn't have to fake unused Response
+ * members (headers, redirected, etc.).
+ * @typedef {(url: string, init?: RequestInit) => Promise<{
+ *   ok: boolean,
+ *   status?: number,
+ *   body?: ReadableStream<Uint8Array> | null,
+ * }>} FetchLike
+ */
+
+/**
  * Resolve the OpenCode server base URL that activates push mode. Presence of
  * a non-null return IS the mode switch every caller checks via
  * `driver.isActive()`.
@@ -197,7 +209,7 @@ export class OpencodeDriver {
   /**
    * @param {{
    *   serverUrl?: string | null,
-   *   fetchImpl?: typeof fetch,
+   *   fetchImpl?: FetchLike,
    *   idleTimeoutMs?: number,
    *   reconnectDelayMs?: number,
    * }} [options]
@@ -299,6 +311,7 @@ export class OpencodeDriver {
     for (const resolve of waiters) resolve();
   }
 
+  /** @returns {Promise<void>} */
   _waitForIdle(sessionID) {
     return new Promise((resolve) => {
       const set = this.idleWaiters.get(sessionID) || new Set();
