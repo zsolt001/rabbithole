@@ -97,17 +97,42 @@ const driver = new OpencodeDriver({ serverUrl: "http://127.0.0.1:9999", fetchImp
 } });
 driver.registerHole("hole-42", "hole-42");
 assert.equal(driver.resolveSession("hole-42"), null, "no session before correlation");
+// Confirmed wire shape (live spike): message.part.updated -> properties.part
+// with part.type "tool" and args at part.state.input.
 driver.handleEvent({
   type: "message.part.updated",
-  properties: { sessionID: "ses_abc", part: { input: { hole_id: "hole-42" } } },
+  properties: {
+    sessionID: "ses_abc",
+    part: { type: "tool", tool: "open_rabbithole", state: { status: "running", input: { hole_id: "hole-42" } } },
+  },
 });
 assert.deepEqual(
   driver.resolveSession("hole-42"),
   { sessionID: "ses_abc", serverURL: "http://127.0.0.1:9999" },
-  "a tool-call-shaped event carrying the nonce correlates the hole to its session"
+  "a tool-call-shaped event carrying the nonce in state.input correlates the hole to its session"
 );
 driver.unregisterHole("hole-42");
 assert.equal(driver.resolveSession("hole-42"), null, "unregisterHole drops the correlation");
+
+// The minted hole_id is a *return* value of open_rabbithole, so it surfaces in
+// the tool's output string, not the model-supplied input — correlate on that too.
+driver.registerHole("hole-out", "hole-out");
+driver.handleEvent({
+  type: "message.part.updated",
+  properties: {
+    sessionID: "ses_out",
+    part: {
+      type: "tool",
+      tool: "open_rabbithole",
+      state: { status: "completed", input: {}, output: '{"status":"listening","hole_id":"hole-out"}' },
+    },
+  },
+});
+assert.deepEqual(
+  driver.resolveSession("hole-out"),
+  { sessionID: "ses_out", serverURL: "http://127.0.0.1:9999" },
+  "a nonce echoed back in the tool output string correlates the hole to its session"
+);
 
 // ---- OpencodeDriver: per-session prompt serialization ----------------------
 
@@ -121,7 +146,7 @@ const serialized = new OpencodeDriver({
   },
 });
 serialized.registerHole("hole-a", "hole-a");
-serialized.handleEvent({ type: "message.part.updated", properties: { sessionID: "ses-shared", part: { input: { hole_id: "hole-a" } } } });
+serialized.handleEvent({ type: "message.part.updated", properties: { sessionID: "ses-shared", part: { type: "tool", state: { input: { hole_id: "hole-a" } } } } });
 
 let firstResolved = false;
 const first = serialized.driveBranch({ holeId: "hole-a" }, { session_id: "s", request_id: "r1", question: "first" });
@@ -150,7 +175,7 @@ await second;
 
 // Different sessions are not serialized against each other.
 serialized.registerHole("hole-b", "hole-b");
-serialized.handleEvent({ type: "message.part.updated", properties: { sessionID: "ses-other", part: { input: { hole_id: "hole-b" } } } });
+serialized.handleEvent({ type: "message.part.updated", properties: { sessionID: "ses-other", part: { type: "tool", state: { input: { hole_id: "hole-b" } } } } });
 const third = serialized.driveBranch({ holeId: "hole-b" }, { session_id: "s", request_id: "r3", question: "third" });
 await new Promise((resolve) => setTimeout(resolve, 10));
 assert.equal(postedBodies.length, 3, "an unrelated session's branch is not blocked behind hole-a's queue");

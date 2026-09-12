@@ -18,10 +18,14 @@
  * tools.js checks; when it is false, nothing here is reachable and behavior
  * is byte-for-byte the existing blocking path.
  *
- * SSE note: OpenCode's global event stream (`GET /event`, mounted under the
- * server's "global" HTTP API group) is consumed by hand-parsing
+ * SSE note: OpenCode's global event stream (`GET /global/event`, mounted
+ * under the server's "global" HTTP API group) is consumed by hand-parsing
  * `text/event-stream` frames off a `fetch` response body, not the global
- * `EventSource` API. Two independent reasons: (1) this package's CI matrix
+ * `EventSource` API. Each frame's JSON is wrapped as
+ * `{directory, project, payload:{id, type, properties}}`; the event type is
+ * at `payload.type` and event data at `payload.properties` (both confirmed
+ * against a live `opencode serve`). Two independent reasons for hand-parsing
+ * rather than `EventSource`: (1) this package's CI matrix
  * tests Node 18.x/20.x/22.x (`.github/workflows/ci.yml`, `engines: >=18` in
  * package.json) and global `EventSource` only landed in Node v22.3.0, so
  * 18.x/20.x would not have it; (2) even on this machine's Node v24.18.0,
@@ -37,14 +41,13 @@ const RECONNECT_DELAY_MS = 2000;
 const MAX_SCAN_DEPTH = 6;
 const MAX_SCAN_KEYS = 200;
 
-// Isolated behind one constant so the exact wire event-type string can be
-// corrected from a live spike (`opencode serve` + `curl -N /event`) without
-// touching correlation or serialization logic. Candidates observed in the
-// OpenCode source (`packages/opencode/src/session/status.ts`): a
-// `SessionStatusEvent.Idle` publication carrying `{ sessionID }`, whose
-// serialized `type` was not pinned to a literal string from static reading
-// alone.
-const IDLE_EVENT_TYPES = new Set(["session.idle", "idle"]);
+// Turn-completion signal, confirmed by live spike. OpenCode emits a dedicated
+// `session.idle` event (`payload.type === "session.idle"`, carrying
+// `payload.properties.sessionID`) when a session's turn finishes. It also
+// emits `session.status` transitions whose `properties.status.type` cycles
+// busy -> idle; `_observeIdle` treats that as a secondary completion signal so
+// a missed `session.idle` frame still releases the per-session wait.
+const IDLE_EVENT_TYPES = new Set(["session.idle"]);
 
 /**
  * The driver only ever reads `.ok`, `.status`, and (for the event stream)
@@ -292,8 +295,18 @@ export class OpencodeDriver {
     if (!this.pendingNonces.size || !looksLikeToolEvent(event)) return;
     const sessionID = extractSessionID(event);
     if (!sessionID) return;
+    // Confirmed by live spike: the tool call arrives as `message.part.updated`
+    // with `properties.part.type === "tool"`, args at `part.state.input`, and
+    // (on the completed state) result text at `part.state.output` (a string).
+    // The nonce is the freshly minted hole_id — a *return* value of
+    // open_rabbithole, so it surfaces in `state.output`, not the model-supplied
+    // `state.input`. Match either: an exact recursive scan of the event (covers
+    // a nonce that ever appears as a discrete input value) OR a substring of the
+    // output string (covers the hole_id echoed back in the tool result).
+    const output = event?.properties?.part?.state?.output;
     for (const [nonce, holeId] of [...this.pendingNonces]) {
-      if (findNonceInToolInput(event, nonce)) {
+      const inOutput = typeof output === "string" && output.includes(nonce);
+      if (inOutput || findNonceInToolInput(event, nonce)) {
         this.holeToSession.set(holeId, { sessionID, serverURL: this.serverUrl });
         this.pendingNonces.delete(nonce);
         log(`OpenCode driver correlated hole ${holeId} to session ${sessionID}`);
@@ -302,7 +315,11 @@ export class OpencodeDriver {
   }
 
   _observeIdle(event) {
-    if (typeof event?.type !== "string" || !IDLE_EVENT_TYPES.has(event.type)) return;
+    if (typeof event?.type !== "string") return;
+    const isIdle =
+      IDLE_EVENT_TYPES.has(event.type) ||
+      (event.type === "session.status" && event?.properties?.status?.type === "idle");
+    if (!isIdle) return;
     const sessionID = extractSessionID(event);
     if (!sessionID) return;
     const waiters = this.idleWaiters.get(sessionID);
@@ -361,11 +378,11 @@ export class OpencodeDriver {
   }
 
   async _postPrompt(target, prompt) {
-    // Body shape: PromptPayload = PromptInput minus sessionID
-    // (packages/opencode/src/server/routes/instance/httpapi/groups/session.ts:70
-    // in the OpenCode source). The exact required fields beyond a text part
-    // were not independently confirmed against a live server — correct this
-    // one function from the live spike before relying on it.
+    // Confirmed by live spike (opencode serve v1.18.10): `POST
+    // /session/:id/prompt_async` requires a `parts` array (each a
+    // TextPartInput `{type:"text", text}`), accepts optional
+    // model/agent/messageID, and returns HTTP 204 on success. A single text
+    // part is the injected branch prompt.
     const response = await this.fetchImpl(`${target.serverURL}/session/${target.sessionID}/prompt_async`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -388,12 +405,11 @@ export class OpencodeDriver {
 
   async _consumeOnce() {
     this.abortController = new AbortController();
-    // Endpoint mount path per the live spike must be confirmed (the OpenCode
-    // source mounts the "global" HTTP API group's `event` endpoint at
-    // `GlobalPaths.event`; the spec text and the source disagree on whether
-    // that resolves to `/event` or `/global/event` at the server root — this
-    // is exactly the "spike the handshake first" risk the spec calls out).
-    const response = await this.fetchImpl(`${this.serverUrl}/event`, {
+    // Endpoint confirmed by live spike (opencode serve v1.18.10): the global
+    // SSE subscribe stream is `GET /global/event` (OpenAPI: "Subscribe to
+    // global events ... using server-sent events"). The bare `GET /event`
+    // endpoint is a non-streaming "Get events" fetch, not the SSE stream.
+    const response = await this.fetchImpl(`${this.serverUrl}/global/event`, {
       signal: this.abortController.signal,
       headers: { accept: "text/event-stream" },
     });
