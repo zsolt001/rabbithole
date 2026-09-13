@@ -181,6 +181,41 @@ export function composeBranchPrompt(deliveredEvent) {
   return lines.join("\n");
 }
 
+/**
+ * Compose the prompt for one PDF conversion (`convert_request`) injected into
+ * the agent's live OpenCode session. Mirrors what the blocking path hands the
+ * agent as a tool result: the page images to transcribe, the transcription
+ * rules, and the ids to answer against. Renders the already-projected
+ * `deliverToAgent(event)` result to text only.
+ * @param {Record<string, any>} deliveredEvent
+ * @returns {string}
+ */
+export function composeConvertPrompt(deliveredEvent) {
+  const lines = [];
+  lines.push(
+    "Rabbithole (push mode): a PDF conversion was requested on the open canvas. " +
+      "This text is an injected prompt, not a tool result. Read each page image " +
+      "below (they are local files — use your image/file read tool on the path), " +
+      "transcribe them to Markdown following the rules, and return the result with " +
+      "answer_branch. Stream page by page with partial:true if you like; the final " +
+      "(partial:false) call ends the conversion. Do not call open_rabbithole again."
+  );
+  lines.push(`session_id: ${deliveredEvent.session_id}`);
+  lines.push(`request_id: ${deliveredEvent.request_id}`);
+  if (deliveredEvent.node_id) lines.push(`node_id: ${deliveredEvent.node_id}`);
+  if (deliveredEvent.hole_id) lines.push(`hole_id: ${deliveredEvent.hole_id}`);
+  const pages = Array.isArray(deliveredEvent.pages) ? deliveredEvent.pages : [];
+  lines.push(`Pages (${deliveredEvent.page_count ?? pages.length}):`);
+  for (const page of pages) lines.push(`- page ${page.n}: ${page.image_path}`);
+  if (deliveredEvent.rules) lines.push(`Transcription rules:\n${deliveredEvent.rules}`);
+  lines.push(
+    `Reply with answer_branch {session_id: ${JSON.stringify(deliveredEvent.session_id)}, ` +
+      `request_id: ${JSON.stringify(deliveredEvent.request_id)}, content: "<markdown>", partial}. ` +
+      "Its final call returns immediately in push mode and does not block."
+  );
+  return lines.join("\n");
+}
+
 function sleep(ms) {
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, ms);
@@ -343,11 +378,11 @@ export class OpencodeDriver {
   }
 
   /**
-   * Compose and inject the prompt for one branch, serialized behind any
-   * still-in-flight prompt for the same OpenCode session (await the prior
-   * answer's completion, observed as an idle signal on the event stream,
-   * before injecting the next branch) — mirrors today's single-listener
-   * serialization without touching it.
+   * Compose and inject the prompt for one delivered event (a `branch_request`
+   * or a `convert_request`), serialized behind any still-in-flight prompt for
+   * the same OpenCode session (await the prior answer's completion, observed as
+   * an idle signal on the event stream, before injecting the next) — mirrors
+   * today's single-listener serialization without touching it.
    * @param {{holeId: string}} session
    * @param {Record<string, any>} deliveredEvent
    */
@@ -367,7 +402,10 @@ export class OpencodeDriver {
   }
 
   async _driveOne(target, deliveredEvent) {
-    const prompt = composeBranchPrompt(deliveredEvent);
+    const prompt =
+      deliveredEvent.status === "convert_request"
+        ? composeConvertPrompt(deliveredEvent)
+        : composeBranchPrompt(deliveredEvent);
     const idle = this._waitForIdle(target.sessionID);
     try {
       await this._postPrompt(target, prompt);

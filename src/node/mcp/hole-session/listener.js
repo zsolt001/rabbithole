@@ -74,8 +74,8 @@ export class SessionListener extends SessionBase {
     // deliverToAgent projection the blocking path uses and injects it into
     // the agent's live OpenCode session.
     const driver = getOpencodeDriver();
-    if (driver.isActive() && event.status === "branch_request") {
-      if (event.node_id) this.queuedNodeIds.add(event.node_id);
+    if (driver.isActive() && (event.status === "branch_request" || event.status === "convert_request")) {
+      if (event.status === "branch_request" && event.node_id) this.queuedNodeIds.add(event.node_id);
       driver.driveBranch(this, this.deliverToAgent(event)).catch((error) => {
         logError(`OpenCode driveBranch failed for request ${event.request_id}: ${error.message}`);
       });

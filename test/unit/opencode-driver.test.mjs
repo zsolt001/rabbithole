@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   OpencodeDriver,
   composeBranchPrompt,
+  composeConvertPrompt,
   findNonceInToolInput,
   resolveOpencodeUrl,
 } from "../../src/node/mcp/opencode-driver.js";
@@ -89,6 +90,28 @@ assert.match(prompt, /sess-1/, "prompt carries the session_id");
 assert.match(prompt, /req-1/, "prompt carries the request_id");
 assert.match(prompt, /What is a monad\?/, "prompt carries the question text");
 assert.match(prompt, /answer_branch/, "prompt tells the agent how to reply");
+
+// ---- composeConvertPrompt: PDF conversion injected prompt ------------------
+
+const convertEvent = {
+  status: "convert_request",
+  session_id: "sess-c",
+  request_id: "req-c",
+  node_id: "node-c",
+  hole_id: "hole-c",
+  page_count: 2,
+  pages: [
+    { n: 1, image_path: "/tmp/holes/hole-c/convert-1.png" },
+    { n: 2, image_path: "/tmp/holes/hole-c/convert-2.png" },
+  ],
+  rules: "Transcribe faithfully.",
+};
+const convertPrompt = composeConvertPrompt(convertEvent);
+assert.match(convertPrompt, /req-c/, "convert prompt carries the request_id");
+assert.match(convertPrompt, /convert-1\.png/, "convert prompt lists each page image path");
+assert.match(convertPrompt, /convert-2\.png/, "convert prompt lists every page, not just the first");
+assert.match(convertPrompt, /Transcribe faithfully\./, "convert prompt carries the transcription rules");
+assert.match(convertPrompt, /answer_branch/, "convert prompt tells the agent how to reply");
 
 // ---- OpencodeDriver: nonce correlation via a synthetic event --------------
 
@@ -181,6 +204,27 @@ await new Promise((resolve) => setTimeout(resolve, 10));
 assert.equal(postedBodies.length, 3, "an unrelated session's branch is not blocked behind hole-a's queue");
 serialized.handleEvent({ type: "session.idle", properties: { sessionID: "ses-other" } });
 await third;
+
+// A convert_request is driven with the convert prompt, not the branch prompt.
+const convertPosts = [];
+const convertDriver = new OpencodeDriver({
+  serverUrl: "http://127.0.0.1:9999",
+  idleTimeoutMs: 50,
+  fetchImpl: async (url, init) => {
+    convertPosts.push(JSON.parse(String(init.body)));
+    return { ok: true };
+  },
+});
+convertDriver.registerHole("hole-c", "hole-c");
+convertDriver.handleEvent({ type: "message.part.updated", properties: { sessionID: "ses-c", part: { type: "tool", state: { input: { hole_id: "hole-c" } } } } });
+convertDriver.driveBranch(
+  { holeId: "hole-c" },
+  { status: "convert_request", session_id: "sess-c", request_id: "req-c", node_id: "n1", pages: [{ n: 1, image_path: "/tmp/p1.png" }], rules: "Transcribe.", page_count: 1 }
+);
+await new Promise((resolve) => setTimeout(resolve, 10));
+assert.equal(convertPosts.length, 1, "the convert_request is injected as a prompt");
+assert.match(convertPosts[0].parts[0].text, /\/tmp\/p1\.png/, "the injected convert prompt is the convert prompt (carries page image paths)");
+convertDriver.stop();
 
 serialized.stop();
 

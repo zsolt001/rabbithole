@@ -1,5 +1,6 @@
 import { RabbitholeSession } from "./hole-session/session.js";
 import { getAgentContextMonitor } from "../context-gauge/index.js";
+import { getOpencodeDriver } from "./opencode-driver.js";
 import { shortId } from "../shared/ids.js";
 
 const sessions = new Map();
@@ -10,7 +11,16 @@ export async function createSession(config) {
     ...config,
     sessionId: mintSessionId(),
     onContextClose: () => unsubscribeContext(),
-    onClose: (s) => sessions.delete(s.id),
+    onClose: (s) => {
+      sessions.delete(s.id);
+      // Bound the OpenCode driver's hole->session correlation map: once no live
+      // session remains for this hole, its entry (and any pending nonce) is
+      // stale. A resume opens the replacement session and re-registers before
+      // the superseded session's onClose fires (onClose is deferred inside
+      // close()), so guard on any remaining live session for the hole to avoid
+      // dropping the fresh registration.
+      if (!getSessionByHole(s.holeId)) getOpencodeDriver().unregisterHole(s.holeId);
+    },
   });
   sessions.set(session.id, session);
   // Headless mode is used by the hermetic suite and has no browser indicator
