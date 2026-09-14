@@ -135,6 +135,35 @@ function runCheckDescriptorGoldens() {
   console.log("ok check: registration metadata, strict parse/rejections, prose projection, and escaped mount structure");
 }
 
+function runChartDescriptorGoldens() {
+  const descriptor = getBlockType("chart");
+  assert(descriptor, "chart should be registered");
+  assert.deepEqual(
+    { type: descriptor.type, version: descriptor.version, security: descriptor.security },
+    { type: "chart", version: 1, security: "sanitize-html" },
+  );
+  const source = JSON.stringify({
+    v: 1,
+    type: "confidence-band",
+    title: "Estimated effect",
+    caption: "Point estimate with 95% confidence interval.",
+    data: [{ year: 2024, estimate: 2.1, low: 1.7, high: 2.5 }],
+    x: "year",
+    y: "low",
+    y2: "high",
+    value: "estimate",
+  });
+  const model = /** @type {any} */ (descriptor.parse(source));
+  assert.equal(model.type, "confidence-band");
+  assert.match(descriptor.toPlainText(model), /Estimated effect/);
+  assert.match(descriptor.toPlainText(model), /year\testimate\tlow\thigh/);
+  assert.throws(() => descriptor.parse('{"v":1,"type":"line","data":[],"url":"https://example.com"}'), /unsupported key: url/);
+  assert.throws(() => descriptor.parse('{"v":2,"type":"line","data":[{"x":1}]}'), /v must be 1/);
+  assert.throws(() => descriptor.parse('{"v":1,"type":"pie","data":[{"x":1}]}'), /Chart type/);
+  assert.throws(() => descriptor.parse('{"v":1,"type":"line","data":[{"x":{"nested":true}}]}'), /data values/);
+  console.log("ok chart: registration, strict schema, bounded inline data, and plain-text projection");
+}
+
 function runDerivedFenceRecognition() {
   registerBlockType({
     type: "customblock",
@@ -498,6 +527,7 @@ async function assertPageAssembly() {
 runBlockIdNormalization();
 runBlockRegistryContract();
 runCheckDescriptorGoldens();
+runChartDescriptorGoldens();
 runDerivedFenceRecognition();
 await runMarkdownFixtures();
 await runClientMountSimulation();

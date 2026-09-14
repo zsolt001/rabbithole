@@ -41,6 +41,7 @@
     "test:performance": "node test/run.mjs performance",
     "test:packaging": "node test/run.mjs packaging",
     "calibrate:budgets": "node test/support/calibrate-budgets.mjs",
+    "evaluate:charts": "node scripts/evaluate-chart-renderers.mjs",
     "eval": "node test/evals/run-eval.mjs"
   },
   "keywords": [
@@ -67,6 +68,7 @@
   "dependencies": {
     "@mermaid-js/tiny": "11.16.0",
     "@modelcontextprotocol/sdk": "^1.12.1",
+    "@observablehq/plot": "0.6.17",
     "dompurify": "^3.4.11",
     "highlight.js": "^11.11.1",
     "katex": "^0.17.0",

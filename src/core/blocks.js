@@ -1,5 +1,6 @@
 /** @typedef {"sanitize-html" | "inert"} BlockSecurity */
 /** @typedef {{ type: string, version: number, parse: (source: string) => unknown, toPlainText: (model: any) => string, security: BlockSecurity }} BlockTypeDescriptor */
+import { parseSimulation, parseTrace, simulate, traceToPlainText } from "./system-simulation.js";
 
 /** @type {Map<string, BlockTypeDescriptor>} */
 const blockTypes = new Map();
@@ -149,6 +150,28 @@ registerBlockType({
 });
 
 registerBlockType({
+  type: "trace",
+  version: 1,
+  parse(/** @type {string} */ source) {
+    try { return parseTrace(source); }
+    catch (error) { throw new Error(`Trace body is invalid: ${error instanceof Error ? error.message : String(error)}`); }
+  },
+  toPlainText: traceToPlainText,
+  security: "sanitize-html",
+});
+
+registerBlockType({
+  type: "sim",
+  version: 1,
+  parse(/** @type {string} */ source) {
+    try { return parseSimulation(source); }
+    catch (error) { throw new Error(`Simulation body is invalid: ${error instanceof Error ? error.message : String(error)}`); }
+  },
+  toPlainText(/** @type {any} */ model) { return traceToPlainText(simulate(model)); },
+  security: "sanitize-html",
+});
+
+registerBlockType({
   type: "mermaid",
   version: 1,
   parse(/** @type {unknown} */ source) { return String(source ?? ""); },
@@ -180,10 +203,82 @@ function parseCheck(source) {
   };
 }
 
+const CHART_TYPES = new Set([
+  "line", "step", "scatter", "bubble", "bar", "grouped-bar", "stacked-bar", "histogram", "density", "ecdf",
+  "box", "violin", "error-bar", "confidence-band", "area", "stacked-area", "heatmap", "contour",
+]);
+const CHART_KEYS = new Set([
+  "v", "type", "title", "subtitle", "caption", "data", "x", "y", "y2", "value", "series", "group", "color", "size",
+  "xLabel", "yLabel", "xScale", "yScale", "bins", "bandwidth", "annotations", "references",
+]);
+
+/** @param {string} source */
+function parseChart(source) {
+  const text = String(source ?? "");
+  if (text.length > 65536) throw new Error("Chart body must not exceed 64 KiB");
+  let model;
+  try {
+    model = JSON.parse(text);
+  } catch (error) {
+    throw new Error(`Chart body must be valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (!model || typeof model !== "object" || Array.isArray(model)) throw new Error("Chart body must be a JSON object");
+  const unknown = Object.keys(model).filter((key) => !CHART_KEYS.has(key));
+  if (unknown.length) throw new Error(`Chart body contains unsupported ${unknown.length === 1 ? "key" : "keys"}: ${unknown.join(", ")}`);
+  if (model.v !== 1) throw new Error("Chart v must be 1");
+  if (!CHART_TYPES.has(model.type)) throw new Error(`Chart type must be one of: ${[...CHART_TYPES].join(", ")}`);
+  if (!Array.isArray(model.data) || !model.data.length || model.data.length > 5000) throw new Error("Chart data must contain 1-5000 rows");
+  for (const row of model.data) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) throw new Error("Chart data rows must be JSON objects");
+    if (Object.keys(row).length > 32) throw new Error("Chart data rows must contain at most 32 fields");
+    for (const value of Object.values(row)) {
+      if (value !== null && typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
+        throw new Error("Chart data values must be strings, numbers, booleans, or null");
+      }
+      if (typeof value === "number" && !Number.isFinite(value)) throw new Error("Chart numeric values must be finite");
+      if (typeof value === "string" && value.length > 500) throw new Error("Chart data strings must not exceed 500 characters");
+    }
+  }
+  for (const key of ["title", "subtitle", "caption", "x", "y", "y2", "value", "series", "group", "color", "size", "xLabel", "yLabel"]) {
+    if (model[key] !== undefined && (typeof model[key] !== "string" || !model[key].trim() || model[key].length > 500)) {
+      throw new Error(`Chart ${key} must be a non-empty string of at most 500 characters`);
+    }
+  }
+  if (model.xScale !== undefined && !["linear", "log", "time", "utc", "ordinal", "band", "point"].includes(model.xScale)) throw new Error("Chart xScale is unsupported");
+  if (model.yScale !== undefined && !["linear", "log", "time", "utc"].includes(model.yScale)) throw new Error("Chart yScale is unsupported");
+  if (model.bins !== undefined && (!Number.isInteger(model.bins) || model.bins < 2 || model.bins > 100)) throw new Error("Chart bins must be an integer from 2 to 100");
+  if (model.bandwidth !== undefined && (typeof model.bandwidth !== "number" || !Number.isFinite(model.bandwidth) || model.bandwidth <= 0)) throw new Error("Chart bandwidth must be a positive finite number");
+  if (model.annotations !== undefined) {
+    if (!Array.isArray(model.annotations) || model.annotations.length > 20) throw new Error("Chart annotations must contain at most 20 items");
+    for (const annotation of model.annotations) {
+      if (!annotation || typeof annotation !== "object" || Array.isArray(annotation) || typeof annotation.label !== "string" || typeof annotation.x !== "number" || typeof annotation.y !== "number") throw new Error("Each chart annotation requires numeric x/y and a label");
+    }
+  }
+  if (model.references !== undefined) {
+    if (!Array.isArray(model.references) || model.references.length > 10) throw new Error("Chart references must contain at most 10 items");
+    for (const reference of model.references) {
+      if (!reference || typeof reference !== "object" || Array.isArray(reference) || !["x", "y"].includes(reference.axis) || typeof reference.value !== "number" || !Number.isFinite(reference.value)) throw new Error("Each chart reference requires axis x/y and a finite numeric value");
+    }
+  }
+  return structuredClone(model);
+}
+
 registerBlockType({
   type: "check",
   version: 1,
   parse: parseCheck,
   toPlainText(/** @type {any} */ model) { return [model.question, ...model.options].join("\n"); },
+  security: "sanitize-html",
+});
+
+registerBlockType({
+  type: "chart",
+  version: 1,
+  parse: parseChart,
+  toPlainText(/** @type {any} */ model) {
+    const columns = [...new Set(model.data.flatMap((/** @type {Record<string, any>} */ row) => Object.keys(row)))];
+    const rows = model.data.slice(0, 50).map((/** @type {Record<string, any>} */ row) => columns.map((column) => String(row[column] ?? "")).join("\t"));
+    return [model.title || `${model.type} chart`, model.caption || "", columns.join("\t"), ...rows].filter(Boolean).join("\n");
+  },
   security: "sanitize-html",
 });

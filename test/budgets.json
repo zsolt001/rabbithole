@@ -8,20 +8,20 @@
       "description": "Built live client bundle size",
       "unit": "bytes",
       "tolerance": 0.05,
-      "rationale": "Exact file size after a deterministic build. Asking everywhere deliberately adds editable preset settings, shadow-root visual selection and marks, and atomic docked-note conversion to the live client; the WYSIWYG Quick questions section, linked preset sets, and removable presets are part of that trade.",
-      "baseline": 737228,
-      "ceiling": 774089.4,
-      "measured_at_commit": "5633597+asking-settings-wysiwyg"
+      "rationale": "Exact file size after a deterministic build. The live client includes strict trace/simulation parsing and playback plus chart export/fullscreen controls; the 319 KB chart renderer remains a separate conditional runtime.",
+      "baseline": 786249,
+      "ceiling": 825561.45,
+      "measured_at_commit": "feat/visual-fences"
     },
     {
       "id": "bundle_frozen_client_bytes",
       "description": "Built frozen client bundle size",
       "unit": "bytes",
       "tolerance": 0.05,
-      "rationale": "Exact file size after a deterministic build. Asking everywhere deliberately adds read-only visual branch chips, fullscreen selection-safe visual mounting, and preset-origin presentation to frozen snapshots without adding a runtime.",
-      "baseline": 703024,
-      "ceiling": 738175.2,
-      "measured_at_commit": "5633597+asking-settings-wysiwyg"
+      "rationale": "Exact file size after a deterministic build. Frozen snapshots include deterministic trace/simulation playback and chart export/fullscreen controls; chart rendering remains conditionally embedded only when used.",
+      "baseline": 739507,
+      "ceiling": 776482.35,
+      "measured_at_commit": "feat/visual-fences"
     },
     {
       "id": "web_initial_js_bytes",
@@ -48,30 +48,30 @@
       "description": "Production PDF.js runtime plus worker",
       "unit": "bytes",
       "tolerance": 0.05,
-      "rationale": "Exact size of the lazily loaded production PDF.js module and worker.",
-      "baseline": 1334801,
-      "ceiling": 1401541.05,
-      "measured_at_commit": "bb59262"
+      "rationale": "Exact size of the lazily loaded production PDF.js module and worker. Recalibrated against the locked 4.10.38 distribution; visual fences do not add PDF code.",
+      "baseline": 1728483,
+      "ceiling": 1814907.15,
+      "measured_at_commit": "feat/visual-fences"
     },
     {
       "id": "snapshot_math_bytes",
       "description": "Frozen HTML size for the math-heavy reference corpus",
       "unit": "bytes",
       "tolerance": 0.05,
-      "rationale": "Exact UTF-8 snapshot size. Snapshots now carry the note extensions namespace and docked-note affordances.",
-      "baseline": 1184955,
-      "ceiling": 1244202.75,
-      "measured_at_commit": "bb59262"
+      "rationale": "Exact UTF-8 snapshot size. The shared frozen client now supports trace/simulation playback and chart export/fullscreen controls; chart renderer bytes remain absent from snapshots without charts.",
+      "baseline": 1258958,
+      "ceiling": 1321905.9,
+      "measured_at_commit": "feat/visual-fences"
     },
     {
       "id": "snapshot_assets_bytes",
       "description": "Frozen HTML size for the PNG/SVG reference corpus",
       "unit": "bytes",
       "tolerance": 0.05,
-      "rationale": "Exact UTF-8 snapshot size including assets. Snapshots now carry the note extensions namespace and docked-note affordances.",
-      "baseline": 1184989,
-      "ceiling": 1244238.45,
-      "measured_at_commit": "bb59262"
+      "rationale": "Exact UTF-8 snapshot size including assets. The shared frozen client now supports trace/simulation playback and chart export/fullscreen controls; chart renderer bytes remain absent from snapshots without charts.",
+      "baseline": 1258989,
+      "ceiling": 1321938.45,
+      "measured_at_commit": "feat/visual-fences"
     },
     {
       "id": "snapshot_math_build_ms",

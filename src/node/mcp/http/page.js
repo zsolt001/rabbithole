@@ -8,7 +8,8 @@
 
 import { serializeForInlineScript } from "../../../core/utils.js";
 import { assembleRabbitholePage } from "../../../core/html/document.js";
-import { getDompurifyScript, getFrozenClientLiteral, getInlinePdfJsScript, getInlinePdfWorkerScript, getMermaidScript, getUiAssets } from "../../shared/dist-assets.js";
+import { markdownContainsBlockType } from "../../../core/blocks.js";
+import { getChartScript, getDompurifyScript, getFrozenClientLiteral, getInlinePdfJsScript, getInlinePdfWorkerScript, getMermaidScript, getUiAssets } from "../../shared/dist-assets.js";
 import { getCoreHtml } from "./assets.js";
 
 export async function buildCanvasHtml(hydration) {
@@ -17,6 +18,7 @@ export async function buildCanvasHtml(hydration) {
   const { stylesheetText, clientSource } = await getUiAssets();
   const { CANVAS_SHELL } = await getCoreHtml();
   const usesPdf = !!hydration?.nodes?.some((node) => node?.extensions?.pdf?.version === 2 && !node.extensions.pdf.converted);
+  const usesChart = !!hydration?.nodes?.some((node) => markdownContainsBlockType(node?.markdown, "chart"));
   const pdfRuntimeCarriers = usesPdf
     ? `<script type="application/vnd.rabbithole+pdfjs" id="rabbithole-pdfjs-runtime">${getInlinePdfJsScript()}</script>
 <script type="application/vnd.rabbithole+pdf-worker" id="rabbithole-pdf-worker-runtime">${getInlinePdfWorkerScript()}</script>`
@@ -30,6 +32,7 @@ export async function buildCanvasHtml(hydration) {
 
   const bodyHtml = `${CANVAS_SHELL}
 <script type="application/vnd.rabbithole+mermaid" id="rabbithole-mermaid-runtime">${getMermaidScript()}</script>
+${usesChart ? `<script type="application/vnd.rabbithole+chart" id="rabbithole-chart-runtime">${getChartScript()}</script>` : ""}
 ${pdfRuntimeCarriers}
 <script>
 ${getDompurifyScript()}

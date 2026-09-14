@@ -37,7 +37,10 @@
 import { log, error as logError } from "../shared/logger.js";
 
 const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+const DEFAULT_CORRELATION_TIMEOUT_MS = 15 * 1000;
 const RECONNECT_DELAY_MS = 2000;
+const PROMPT_RETRY_DELAY_MS = 1000;
+const MAX_PROMPT_ATTEMPTS = 3;
 const MAX_SCAN_DEPTH = 6;
 const MAX_SCAN_KEYS = 200;
 
@@ -250,13 +253,17 @@ export class OpencodeDriver {
    *   fetchImpl?: FetchLike,
    *   idleTimeoutMs?: number,
    *   reconnectDelayMs?: number,
+   *   promptRetryDelayMs?: number,
+   *   correlationTimeoutMs?: number,
    * }} [options]
    */
-  constructor({ serverUrl = null, fetchImpl = fetch, idleTimeoutMs = DEFAULT_IDLE_TIMEOUT_MS, reconnectDelayMs = RECONNECT_DELAY_MS } = {}) {
+  constructor({ serverUrl = null, fetchImpl = fetch, idleTimeoutMs = DEFAULT_IDLE_TIMEOUT_MS, reconnectDelayMs = RECONNECT_DELAY_MS, promptRetryDelayMs = PROMPT_RETRY_DELAY_MS, correlationTimeoutMs = DEFAULT_CORRELATION_TIMEOUT_MS } = {}) {
     this.serverUrl = serverUrl;
     this.fetchImpl = fetchImpl;
     this.idleTimeoutMs = idleTimeoutMs;
     this.reconnectDelayMs = reconnectDelayMs;
+    this.promptRetryDelayMs = promptRetryDelayMs;
+    this.correlationTimeoutMs = correlationTimeoutMs;
 
     /** @type {Map<string, string>} nonce -> hole_id */
     this.pendingNonces = new Map();
@@ -266,6 +273,8 @@ export class OpencodeDriver {
     this.idleWaiters = new Map();
     /** @type {Map<string, Promise<void>>} sessionID -> serialized prompt chain */
     this.sessionQueues = new Map();
+    /** @type {Map<string, Array<{session: {holeId: string}, event: Record<string, any>, onDelivered?: () => void, timer: ReturnType<typeof setTimeout>, resolve: (value?: void) => void, reject: (error: unknown) => void}>>} hole_id -> drives waiting for nonce correlation */
+    this.pendingDrives = new Map();
 
     this.stopped = true;
     this.abortController = null;
@@ -298,7 +307,11 @@ export class OpencodeDriver {
    * safe to call again on resume of an already-correlated hole.
    */
   registerHole(holeId, nonce = holeId) {
-    if (!this.isActive() || this.holeToSession.has(holeId)) return;
+    if (!this.isActive()) return;
+    // Every open_rabbithole call belongs to the conversation that invoked it.
+    // A prior mapping may point at a terminal/disconnected conversation, so
+    // require the new tool result to establish a fresh correlation lease.
+    this.holeToSession.delete(holeId);
     this.pendingNonces.set(nonce, holeId);
   }
 
@@ -306,6 +319,12 @@ export class OpencodeDriver {
     this.holeToSession.delete(holeId);
     for (const [nonce, hid] of this.pendingNonces) {
       if (hid === holeId) this.pendingNonces.delete(nonce);
+    }
+    const pending = this.pendingDrives.get(holeId) || [];
+    this.pendingDrives.delete(holeId);
+    for (const drive of pending) {
+      clearTimeout(drive.timer);
+      drive.reject(new Error(`OpenCode correlation ended for hole ${holeId}`));
     }
   }
 
@@ -345,7 +364,18 @@ export class OpencodeDriver {
         this.holeToSession.set(holeId, { sessionID, serverURL: this.serverUrl });
         this.pendingNonces.delete(nonce);
         log(`OpenCode driver correlated hole ${holeId} to session ${sessionID}`);
+        this._flushPendingDrives(holeId);
       }
+    }
+  }
+
+  _flushPendingDrives(holeId) {
+    const pending = this.pendingDrives.get(holeId);
+    if (!pending?.length) return;
+    this.pendingDrives.delete(holeId);
+    for (const drive of pending) {
+      clearTimeout(drive.timer);
+      this.driveBranch(drive.session, drive.event, drive.onDelivered).then(drive.resolve, drive.reject);
     }
   }
 
@@ -363,18 +393,29 @@ export class OpencodeDriver {
     for (const resolve of waiters) resolve();
   }
 
-  /** @returns {Promise<void>} */
+  /** @returns {{promise: Promise<void>, cancel: () => void}} */
   _waitForIdle(sessionID) {
-    return new Promise((resolve) => {
+    let cancel = () => {};
+    const promise = new Promise((resolve) => {
       const set = this.idleWaiters.get(sessionID) || new Set();
-      set.add(resolve);
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        set.delete(finish);
+        if (!set.size) this.idleWaiters.delete(sessionID);
+        resolve();
+      };
+      set.add(finish);
       this.idleWaiters.set(sessionID, set);
       const timer = setTimeout(() => {
-        set.delete(resolve);
-        resolve();
+        finish();
       }, this.idleTimeoutMs);
       timer.unref?.();
+      cancel = finish;
     });
+    return { promise, cancel };
   }
 
   /**
@@ -385,15 +426,30 @@ export class OpencodeDriver {
    * today's single-listener serialization without touching it.
    * @param {{holeId: string}} session
    * @param {Record<string, any>} deliveredEvent
+   * @param {() => void} [onDelivered]
    */
-  driveBranch(session, deliveredEvent) {
+  driveBranch(session, deliveredEvent, onDelivered) {
     const target = this.resolveSession(session.holeId);
     if (!target) {
-      logError(`OpenCode driver has no correlated session for hole ${session.holeId}; branch ${deliveredEvent.request_id} was not injected`);
-      return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const pending = this.pendingDrives.get(session.holeId) || [];
+        const timer = setTimeout(() => {
+          const queued = this.pendingDrives.get(session.holeId) || [];
+          const index = queued.findIndex((drive) => drive.event.request_id === deliveredEvent.request_id);
+          if (index !== -1) queued.splice(index, 1);
+          if (!queued.length) this.pendingDrives.delete(session.holeId);
+          reject(new Error(
+            `OpenCode hole ${session.holeId} did not correlate with ${this.serverUrl} within ${this.correlationTimeoutMs}ms; ` +
+            "verify RABBITHOLE_OPENCODE_URL points to this OpenCode TUI's HTTP server"
+          ));
+        }, this.correlationTimeoutMs);
+        pending.push({ session, event: deliveredEvent, onDelivered, timer, resolve, reject });
+        this.pendingDrives.set(session.holeId, pending);
+        log(`OpenCode driver queued request ${deliveredEvent.request_id} until hole ${session.holeId} is correlated`);
+      });
     }
     const prior = this.sessionQueues.get(target.sessionID) || Promise.resolve();
-    const next = prior.then(() => this._driveOne(target, deliveredEvent));
+    const next = prior.then(() => this._driveOne(target, deliveredEvent, onDelivered));
     this.sessionQueues.set(
       target.sessionID,
       next.catch(() => {})
@@ -401,18 +457,32 @@ export class OpencodeDriver {
     return next;
   }
 
-  async _driveOne(target, deliveredEvent) {
+  async _driveOne(target, deliveredEvent, onDelivered) {
     const prompt =
       deliveredEvent.status === "convert_request"
         ? composeConvertPrompt(deliveredEvent)
         : composeBranchPrompt(deliveredEvent);
-    const idle = this._waitForIdle(target.sessionID);
-    try {
-      await this._postPrompt(target, prompt);
-    } catch (error) {
-      logError(`OpenCode prompt_async failed for session ${target.sessionID}: ${error.message}`);
+    let lastError;
+    for (let attempt = 1; attempt <= MAX_PROMPT_ATTEMPTS; attempt += 1) {
+      // Arm before POST so an extremely fast turn cannot emit session.idle in
+      // the gap between prompt acceptance and listener registration.
+      const idle = this._waitForIdle(target.sessionID);
+      try {
+        await this._postPrompt(target, prompt);
+        onDelivered?.();
+        await idle.promise;
+        return;
+      } catch (error) {
+        idle.cancel();
+        lastError = error;
+        logError(
+          `OpenCode prompt_async failed for session ${target.sessionID} ` +
+          `(attempt ${attempt}/${MAX_PROMPT_ATTEMPTS}): ${error.message}`
+        );
+        if (attempt < MAX_PROMPT_ATTEMPTS) await sleep(this.promptRetryDelayMs);
+      }
     }
-    await idle;
+    throw lastError;
   }
 
   async _postPrompt(target, prompt) {
