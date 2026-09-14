@@ -4,8 +4,9 @@
 import { getBlockType } from "../core/blocks.js";
 import { normalizeBlockAnchor } from "../core/hole/anchor.js";
 import { iconSvg } from "../core/html/icons.js";
-import { BUTTON_OPEN } from "../core/html/markup.js";
-import { escapeHtml } from "../core/utils.js";
+import { BUTTON_OPEN, buttonGroupMarkup } from "../core/html/markup.js";
+import { simulate } from "../core/system-simulation.js";
+import { escapeHtml, slugifyTitle } from "../core/utils.js";
 import { createCleanupScope } from "./kit/scope.js";
 import { disposeLightbox, openLightbox } from "./lightbox.js";
 import { visualStylesFor } from "./visual-style-runtime.js";
@@ -19,6 +20,7 @@ let mermaidRenderId = 0;
 let mermaidControllers = [];
 let mermaidThemeObserver = null;
 let mermaidGeneration = 0;
+let chartRuntimePromise = null;
 const utf8Decoder = typeof TextDecoder === "function" ? new TextDecoder("utf-8") : null;
 
 function loadEmbeddedMermaidRuntime() {
@@ -32,6 +34,19 @@ function loadEmbeddedMermaidRuntime() {
   script.remove();
   if (!window.mermaid) throw new Error("Mermaid runtime failed to initialize");
   return window.mermaid;
+}
+
+function loadEmbeddedChartRuntime() {
+  if (window.RabbitholeChartRuntime) return window.RabbitholeChartRuntime;
+  const carrier = document.getElementById("rabbithole-chart-runtime");
+  if (!carrier || !carrier.textContent) throw new Error("Chart runtime is unavailable");
+  const script = document.createElement("script");
+  script.setAttribute("data-rabbithole-runtime", "chart");
+  script.textContent = carrier.textContent;
+  (document.head || document.body || document.documentElement).appendChild(script);
+  script.remove();
+  if (!window.RabbitholeChartRuntime) throw new Error("Chart runtime failed to initialize");
+  return window.RabbitholeChartRuntime;
 }
 
 function defaultVisualHooks() {
@@ -53,6 +68,7 @@ function defaultVisualHooks() {
       return false;
     },
     loadMermaid: loadEmbeddedMermaidRuntime,
+    loadChart: loadEmbeddedChartRuntime,
   };
 }
 /** @type {any} */
@@ -83,6 +99,7 @@ export function disposeVisuals() {
   mermaidRenderQueue = Promise.resolve();
   mermaidControllers = [];
   mermaidGeneration += 1;
+  chartRuntimePromise = null;
   if (mermaidThemeObserver) mermaidThemeObserver.disconnect();
   mermaidThemeObserver = null;
 }
@@ -113,7 +130,7 @@ export function registerBlockMount(type, mountSpec) {
  * DOMPurify keeps <style> for show/mermaid content but does not parse the CSS
  * inside it, so `url(https://tracker/…)` or an `@import` in a sanitized style
  * block is a passive "document opened" beacon that fires on render. Empty every
- * network-reaching url() target and drop every @import, while preserving local
+ * network-reaching url() target and drop every CSS import rule, while preserving local
  * url(#id) references (mermaid markers/gradients).
  */
 export function stripStyleNetworkRefs(css) {
@@ -458,6 +475,280 @@ function wireShowSurface(root, _model, context, mountSpec) {
 
 function buildMermaidVisual() {
   return '<div class="rh-mermaid" role="img" aria-label="Mermaid diagram"><span class="rh-mermaid-loading">Drawing diagram…</span></div>';
+}
+
+function buildChartVisual(model) {
+  return (
+    '<div class="rh-chart" role="img" aria-label="' +
+    escapeHtml(model.title || `${model.type} chart`) +
+    '"><span class="rh-chart-loading">Drawing chart…</span></div>'
+  );
+}
+
+function buildTraceVisual(model) {
+  const actors = model.actors
+    .map(
+      (actor) =>
+        '<div class="rh-trace-actor" data-actor="' +
+        escapeHtml(actor.id) +
+        '" data-actor-type="' +
+        escapeHtml(actor.type) +
+        '"><strong>' +
+        escapeHtml(actor.label) +
+        "</strong><span>" +
+        escapeHtml(actor.type) +
+        "</span>" +
+        (actor.type === "queue" && actor.capacity
+          ? '<div class="rh-trace-queue-meter" role="progressbar" aria-label="' +
+            escapeHtml(`${actor.label} queue depth`) +
+            '" aria-valuemin="0" aria-valuemax="' +
+            actor.capacity +
+            '" aria-valuenow="0"><i></i></div>'
+          : "") +
+        "<output>0" +
+        (actor.type === "queue" && actor.capacity ? ` / ${actor.capacity}` : "") +
+        "</output></div>",
+    )
+    .join("");
+  return (
+    '<section class="rh-trace"><div class="rh-trace-actors">' +
+    actors +
+    '</div><div class="rh-trace-caption" aria-live="polite"></div><div class="rh-trace-controls">' +
+    buttonGroupMarkup([
+      { bare: true, content: "Previous", dataAttrs: { trace: "previous" } },
+      { bare: true, content: "Play", dataAttrs: { trace: "play" } },
+      { bare: true, content: "Next", dataAttrs: { trace: "next" } },
+    ]) +
+    '<input type="range" min="0" max="' +
+    Math.max(0, model.events.length - 1) +
+    '" value="0" aria-label="Trace position"></div></section>'
+  );
+}
+
+function wireTrace(root, model) {
+  const trace = root.querySelector(".rh-trace");
+  if (!trace) return;
+  const controls = trace.querySelector(".rh-trace-controls");
+  const range = controls.querySelector('input[type="range"]');
+  const play = controls.querySelector('[data-trace="play"]');
+  const caption = trace.querySelector(".rh-trace-caption");
+  let index = 0;
+  let timer = null;
+  function stop() {
+    if (timer) clearInterval(timer);
+    timer = null;
+    play.textContent = "Play";
+  }
+  function paint(next) {
+    index = Math.max(0, Math.min(model.events.length - 1, next));
+    range.value = String(index);
+    const counts = Object.fromEntries(model.actors.map((actor) => [actor.id, 0]));
+    for (let current = 0; current <= index; current += 1) {
+      const event = model.events[current];
+      if (event.type === "enqueue" && event.target) counts[event.target] += 1;
+      if (event.type === "dequeue" && event.from) counts[event.from] = Math.max(0, counts[event.from] - 1);
+      if (event.type === "start" && event.target) counts[event.target] += 1;
+      if (["complete", "failure", "timeout"].includes(event.type) && event.target)
+        counts[event.target] = Math.max(0, counts[event.target] - 1);
+    }
+    for (const actor of model.actors) {
+      const element = trace.querySelector('[data-actor="' + CSS.escape(actor.id) + '"]');
+      element.classList.toggle(
+        "is-active",
+        [model.events[index].from, model.events[index].to, model.events[index].target].includes(actor.id),
+      );
+      const count = counts[actor.id];
+      element.querySelector("output").textContent =
+        actor.type === "queue" && actor.capacity ? `${count} / ${actor.capacity}` : String(count);
+      const meter = element.querySelector(".rh-trace-queue-meter");
+      if (meter) {
+        const ratio = Math.min(1, count / actor.capacity);
+        meter.setAttribute("aria-valuenow", String(count));
+        meter.querySelector("i").style.width = `${ratio * 100}%`;
+        meter.classList.toggle("is-full", count >= actor.capacity);
+      }
+    }
+    const event = model.events[index];
+    caption.textContent = `${event.at}: ${event.caption || `${event.type} ${event.item || ""}`.trim()}`;
+  }
+  function onClick(event) {
+    const action = event.target.closest?.("[data-trace]")?.dataset.trace;
+    if (action === "previous") {
+      stop();
+      paint(index - 1);
+    }
+    if (action === "next") {
+      stop();
+      paint(index + 1);
+    }
+    if (action === "play") {
+      if (timer) stop();
+      else {
+        play.textContent = "Pause";
+        timer = setInterval(() => {
+          if (index >= model.events.length - 1) stop();
+          else paint(index + 1);
+        }, 700);
+      }
+    }
+  }
+  function onInput() {
+    stop();
+    paint(Number(range.value));
+  }
+  controls.addEventListener("click", onClick);
+  range.addEventListener("input", onInput);
+  paint(0);
+  return function () {
+    stop();
+    controls.removeEventListener("click", onClick);
+    range.removeEventListener("input", onInput);
+  };
+}
+
+function chartTextElement(target, root) {
+  const element = target?.closest?.("text");
+  return element && root.contains(element) ? element : null;
+}
+
+function cloneChartSvg(svg) {
+  const clone = svg.cloneNode(true);
+  clone.removeAttribute("width");
+  clone.removeAttribute("height");
+  clone.style.removeProperty("width");
+  clone.style.removeProperty("height");
+  clone.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  clone.classList.add("rh-lightbox-diagram");
+  return clone;
+}
+
+function downloadChartSvg(svg, model) {
+  const clone = svg.cloneNode(true);
+  if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  const blob = new Blob([new XMLSerializer().serializeToString(clone)], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${slugifyTitle(model.title || `${model.type}-chart`, { fallback: "chart" })}.svg`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function mountChartAffordances(root, target, model, context, mountSpec) {
+  const frame = root.closest?.(".rh-viz-frame");
+  const svg = target.querySelector("svg");
+  if (!frame || !svg) return function () {};
+  const controls = document.createElement("div");
+  controls.className = "rh-chart-actions";
+  controls.innerHTML = buttonGroupMarkup([
+    {
+      bare: true,
+      className: "rh-chart-download",
+      ariaLabel: "Download chart as SVG",
+      title: "Download SVG",
+      dataAttrs: { chartAction: "download" },
+      content: iconSvg("download"),
+    },
+    {
+      bare: true,
+      className: "rh-chart-expand",
+      ariaLabel: "Open chart fullscreen",
+      title: "Open fullscreen",
+      dataAttrs: { chartAction: "expand" },
+      content: iconSvg("expand"),
+    },
+  ]);
+  frame.appendChild(controls);
+  let lightbox = null;
+  let selectionCleanup = function () {};
+  function onClick(event) {
+    const action = event.target.closest?.("[data-chart-action]")?.dataset.chartAction;
+    if (action === "download") downloadChartSvg(svg, model);
+    if (action === "expand") {
+      lightbox = openLightbox({
+        content: cloneChartSvg(svg),
+        label: svg.getAttribute("aria-label") || model.title || "Chart",
+        trigger: controls.querySelector('[data-chart-action="expand"]'),
+        variant: "diagram",
+        selectionEnabled: true,
+        onContentChange(content) {
+          selectionCleanup();
+          selectionCleanup = mountSpec.wireSelection(content, context, mountSpec);
+        },
+        onClose() {
+          selectionCleanup();
+        },
+      });
+    }
+  }
+  controls.addEventListener("click", onClick);
+  return function () {
+    selectionCleanup();
+    lightbox?.dispose();
+    controls.removeEventListener("click", onClick);
+    controls.remove();
+  };
+}
+
+function currentChartTheme() {
+  const root = document.documentElement;
+  const computed = window.getComputedStyle(root);
+  const value = (name, fallback) => computed.getPropertyValue(name).trim() || fallback;
+  return {
+    background: value("--card-bg", "transparent"),
+    foreground: value("--fg", "currentColor"),
+    fontFamily: value("--font-ui", "system-ui, sans-serif"),
+    palette: [
+      value("--accent", "#27628c"),
+      value("--warn", "#bb5b33"),
+      value("--fg-dim", "#54814c"),
+      value("--border-focus", "#7c5aa6"),
+    ],
+  };
+}
+
+function loadChartRuntime() {
+  if (!chartRuntimePromise) {
+    chartRuntimePromise = Promise.resolve()
+      .then(() => visualHooks.loadChart())
+      .then((runtime) => {
+        if (!runtime || typeof runtime.render !== "function") throw new Error("Chart runtime does not expose render()");
+        return runtime;
+      })
+      .catch((error) => {
+        chartRuntimePromise = null;
+        throw error;
+      });
+  }
+  return chartRuntimePromise;
+}
+
+function wireChart(root, model, context, mountSpec) {
+  const target = root.querySelector(".rh-chart");
+  if (!target) return;
+  let disposed = false;
+  let affordanceCleanup = function () {};
+  loadChartRuntime()
+    .then((runtime) => {
+      if (disposed) return;
+      const rendered = runtime.render(model, currentChartTheme());
+      if (!rendered?.output || !rendered?.svg) throw new Error("Chart runtime produced no SVG");
+      target.textContent = "";
+      target.appendChild(rendered.output);
+      target.classList.add("is-rendered");
+      affordanceCleanup = mountChartAffordances(root, target, model, context, mountSpec);
+    })
+    .catch(() => {
+      if (disposed) return;
+      target.textContent = "Unable to render chart.";
+      target.classList.add("is-error");
+    });
+  return function () {
+    disposed = true;
+    affordanceCleanup();
+  };
 }
 
 function currentMermaidTheme() {
@@ -841,8 +1132,31 @@ const mermaidMount = {
   packContext: packBlockContext,
   paintMark: paintBlockMark,
 };
+const chartMount = {
+  renderHtml: buildChartVisual,
+  wire: wireChart,
+  wireSelection: function (root, context, mountSpec) {
+    return wireTextSelection(root, context, mountSpec, chartTextElement);
+  },
+  packContext: packBlockContext,
+  paintMark: paintBlockMark,
+};
+const traceMount = {
+  renderHtml: buildTraceVisual,
+  wire: wireTrace,
+};
 registerBlockMount("show", showMount);
 registerBlockMount("mermaid", mermaidMount);
+registerBlockMount("chart", chartMount);
+registerBlockMount("trace", traceMount);
+registerBlockMount("sim", {
+  renderHtml(model) {
+    return buildTraceVisual(simulate(model));
+  },
+  wire(root, model) {
+    return wireTrace(root, simulate(model));
+  },
+});
 
 export function buildCheckVisual(model) {
   const options = model.options

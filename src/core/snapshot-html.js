@@ -9,6 +9,11 @@ export function snapshotProjectionUsesMermaid(projection) {
 }
 
 /** @param {any} projection */
+export function snapshotProjectionUsesChart(projection) {
+  return !!projection?.hole?.nodes?.some((/** @type {any} */ node) => markdownContainsBlockType(node?.markdown, "chart"));
+}
+
+/** @param {any} projection */
 export function snapshotProjectionUsesPdf(projection) {
   return !!projection?.hole?.nodes?.some((/** @type {any} */ node) => node?.extensions?.pdf?.version === 2 && !node.extensions.pdf.converted);
 }
@@ -19,22 +24,31 @@ function mermaidRuntimeCarrier(source) {
   return `<script type="application/vnd.rabbithole+mermaid" id="rabbithole-mermaid-runtime">${escaped}</script>`;
 }
 
+/** @param {unknown} source */
+function chartRuntimeCarrier(source) {
+  const escaped = String(source || "").replace(/<\/script/gi, "<\\/script");
+  return `<script type="application/vnd.rabbithole+chart" id="rabbithole-chart-runtime">${escaped}</script>`;
+}
+
 /**
  * @param {{
  *   title: string,
  *   stylesheetText: string,
  *   dompurifySource: string,
  *   mermaidSource?: string,
+ *   chartSource?: string,
  *   frozenClientSource: string,
  *   pdfWorkerSource?: string,
  *   pdfJsSource?: string,
  *   snapshotProjection: any
  * }} options
  */
-export function buildSnapshotHtml({ title, stylesheetText, dompurifySource, mermaidSource = "", pdfJsSource = "", pdfWorkerSource = "", frozenClientSource, snapshotProjection }) {
+export function buildSnapshotHtml({ title, stylesheetText, dompurifySource, mermaidSource = "", chartSource = "", pdfJsSource = "", pdfWorkerSource = "", frozenClientSource, snapshotProjection }) {
   const usesMermaid = snapshotProjectionUsesMermaid(snapshotProjection);
+  const usesChart = snapshotProjectionUsesChart(snapshotProjection);
   const usesPdf = snapshotProjectionUsesPdf(snapshotProjection);
   if (usesMermaid && !mermaidSource) throw new Error("Mermaid runtime is unavailable for this snapshot");
+  if (usesChart && !chartSource) throw new Error("Chart runtime is unavailable for this snapshot");
   if (usesPdf && (!pdfWorkerSource || !pdfJsSource)) throw new Error("PDF runtime is unavailable for this snapshot");
   var lt = String.fromCharCode(60);
   var gt = String.fromCharCode(62);
@@ -43,6 +57,7 @@ export function buildSnapshotHtml({ title, stylesheetText, dompurifySource, merm
   var payloadOpen = lt + 'script type="application/vnd.rabbithole+json" id="rabbithole-portable"' + gt;
   const bodyHtml = CANVAS_SHELL +
     (usesMermaid ? "\n" + mermaidRuntimeCarrier(mermaidSource) : "") +
+    (usesChart ? "\n" + chartRuntimeCarrier(chartSource) : "") +
     (usesPdf ? "\n" + pdfJsRuntimeCarrier(pdfJsSource) + "\n" + pdfWorkerRuntimeCarrier(pdfWorkerSource) : "") +
     "\n" + payloadOpen + serializeForInlineScript(snapshotProjection) + scriptClose +
     "\n" + scriptOpen + "\n" +

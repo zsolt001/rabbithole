@@ -17,6 +17,7 @@ const pairUrl = pairingUrl(token);
     token,
     stdoutIsTTY: false,
     stderrIsTTY: false,
+    emitTokenEnv: "",
   });
   assert.ok(!banner.includes(token), "redacted banner must not carry the token");
   assert.ok(
@@ -56,6 +57,7 @@ const pairUrl = pairingUrl(token);
     token,
     stdoutIsTTY: true,
     stderrIsTTY: true,
+    emitTokenEnv: "",
   });
   assert.ok(banner.includes(pairUrl), "interactive banner carries the pairing link");
   assert.equal(stderrLines.length, 0, "interactive stderr prints no machine log lines");

@@ -81,5 +81,12 @@ assert.match(AUTHORING_VOCABULARY_V1, /Do not put HTML tags such as <i>, <b>, or
 assert.match(AUTHORING_VOCABULARY_V1, /mindmap, architecture, and Mermaid-side KaTeX syntax are not supported/);
 assert.match(AUTHORING_VOCABULARY_V1, /```show id=<slug>/);
 assert.match(AUTHORING_VOCABULARY_V1, /```check with strict JSON/);
+assert.match(AUTHORING_VOCABULARY_V1, /```chart with strict JSON/);
+assert.match(AUTHORING_VOCABULARY_V1, /confidence-band/);
+assert.match(AUTHORING_VOCABULARY_V1, /"type":"line"/);
+assert.match(AUTHORING_VOCABULARY_V1, /```trace with strict JSON/);
+assert.match(AUTHORING_VOCABULARY_V1, /"type":"send"/);
+assert.match(AUTHORING_VOCABULARY_V1, /```sim with strict JSON/);
+assert.match(AUTHORING_VOCABULARY_V1, /"distribution":"constant"/);
 
-console.log("ok prompts: PDF attachments, note context and budget priority, byte-identical text-only messages, and Mermaid guidance");
+console.log("ok prompts: PDF attachments, note context and budget priority, byte-identical text-only messages, and visual-fence guidance");

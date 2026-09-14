@@ -51,12 +51,11 @@ The tool call stays pending while the agent listens for canvas asks. If a client
 
 OpenCode wires the model turn's abort signal into every MCP call, so a listener that blocks past the turn is cancelled with "agent stopped listening" — the pending-call model above never gets to resume. Rabbithole handles this by running as a **push driver** instead: the tool call returns immediately, and when the canvas produces an ask, the MCP server injects a prompt into your live OpenCode session over HTTP rather than parking on a blocking call.
 
-Enable it by pointing the server at OpenCode's HTTP address with `RABBITHOLE_OPENCODE_URL`. Set OpenCode's `server.port` to the same port so the two agree, and plain `opencode` binds there with no `--port` flag:
+Enable it by pointing the server at OpenCode's HTTP address with `RABBITHOLE_OPENCODE_URL`, then launch the TUI with that same HTTP port. In OpenCode 1.18, the top-level `--port` flag controls the live TUI server; the `server.port` config value alone is not applied by a plain `opencode` launch:
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "server": { "hostname": "127.0.0.1", "port": 4599 },
   "mcp": {
     "rabbithole": {
       "type": "local",
@@ -68,7 +67,11 @@ Enable it by pointing the server at OpenCode's HTTP address with `RABBITHOLE_OPE
 }
 ```
 
-The URL's port must match `server.port`. Without `RABBITHOLE_OPENCODE_URL` the server stays in the default blocking-listener mode, so this changes nothing for Claude Code, Codex, or other clients.
+```bash
+opencode --hostname 127.0.0.1 --port 4599
+```
+
+The URL's port must match the TUI's `--port`. Verify it before opening a hole with `curl http://127.0.0.1:4599/global/health`. Without `RABBITHOLE_OPENCODE_URL` the server stays in the default blocking-listener mode, so this changes nothing for Claude Code, Codex, or other clients.
 
 ## Develop
 

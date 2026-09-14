@@ -87,3 +87,11 @@ export function iconButtonMarkup(options = {}) {
   const content = options.svgIconHtml || escapeHtml(String(options.icon || ""));
   return "<button" + buttonAttributes(options, true) + ">" + content + "</button>";
 }
+
+/** @param {Array<ButtonOptions & { content?: string }>} buttons */
+export function buttonGroupMarkup(buttons = []) {
+  return buttons.map((options) => {
+    const content = options.content === undefined ? escapeHtml(String(options.label || "")) : String(options.content);
+    return "<button" + buttonAttributes({ ...options, label: options.label || content }, false) + ">" + content + "</button>";
+  }).join("");
+}

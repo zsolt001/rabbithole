@@ -1,5 +1,7 @@
+import chartCss from "../../../design/document/chart.css";
 import checkCss from "../../../design/document/check.css";
 import mermaidCss from "../../../design/document/mermaid.css";
+import traceCss from "../../../design/document/trace.css";
 import visualBaseCss from "../../../design/document/visual-base.css";
 import { createCanvasAttention } from "../../canvas/attention.js";
 import { createAutoTidy, notifyAutoTidyModeChanged } from "../../canvas/auto-tidy.js";
@@ -49,7 +51,7 @@ function createCanvasMaintenance(clock) {
 }
 
 export function startRabbithole(hydration, options) {
-  setVisualStyles({ visualBaseCss, checkCss, mermaidCss });
+  setVisualStyles({ visualBaseCss, checkCss, mermaidCss, chartCss, traceCss });
   options = options || {};
   if (options.snapshotHooks) setSnapshotHooks(options.snapshotHooks);
   setTransportAdapter(options.transport);

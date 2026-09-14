@@ -5,8 +5,18 @@ import {
   composeBranchPrompt,
   composeConvertPrompt,
   findNonceInToolInput,
+  resetOpencodeDriverForTesting,
   resolveOpencodeUrl,
+  setOpencodeDriverForTesting,
 } from "../../src/node/mcp/opencode-driver.js";
+import { RabbitholeSession } from "../../src/node/mcp/hole-session/session.js";
+
+async function rejectsSoon(promise, pattern, timeoutMs = 100) {
+  const timeout = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error("promise did not settle before timeout")), timeoutMs);
+  });
+  await assert.rejects(Promise.race([promise, timeout]), pattern);
+}
 
 // ---- resolveOpencodeUrl: the mode switch ----------------------------------
 
@@ -156,6 +166,148 @@ assert.deepEqual(
   { sessionID: "ses_out", serverURL: "http://127.0.0.1:9999" },
   "a nonce echoed back in the tool output string correlates the hole to its session"
 );
+
+// A resumed session can requeue its saved asks before the open_rabbithole tool
+// result has correlated the hole to this OpenCode conversation. The prompt must
+// wait for correlation rather than being dropped during that window.
+const delayedPosts = [];
+const delayed = new OpencodeDriver({
+  serverUrl: "http://127.0.0.1:9999",
+  idleTimeoutMs: 50,
+  fetchImpl: async (url, init) => {
+    delayedPosts.push({ url, body: JSON.parse(String(init.body)) });
+    return { ok: true };
+  },
+});
+delayed.registerHole("hole-delayed", "hole-delayed");
+let delayedConfirmed = 0;
+const delayedDelivery = delayed.driveBranch(
+  { holeId: "hole-delayed" },
+  { status: "branch_request", session_id: "sess-delayed", request_id: "req-delayed", question: "Did resume preserve me?" },
+  () => { delayedConfirmed += 1; }
+);
+await new Promise((resolve) => setTimeout(resolve, 10));
+assert.equal(delayedPosts.length, 0, "an uncorrelated branch waits instead of posting to an unknown session");
+assert.equal(delayedConfirmed, 0, "waiting for correlation is not reported as agent delivery");
+delayed.handleEvent({
+  type: "message.part.updated",
+  properties: {
+    sessionID: "ses-delayed",
+    part: { type: "tool", state: { status: "completed", output: '{"hole_id":"hole-delayed"}' } },
+  },
+});
+await new Promise((resolve) => setTimeout(resolve, 10));
+assert.equal(delayedPosts.length, 1, "correlation flushes the saved branch exactly once");
+assert.equal(delayedConfirmed, 1, "successful prompt injection confirms agent delivery exactly once");
+assert.match(delayedPosts[0].body.parts[0].text, /Did resume preserve me\?/, "the delayed prompt retains its question");
+delayed.handleEvent({ type: "session.idle", properties: { sessionID: "ses-delayed" } });
+await delayedDelivery;
+delayed.stop();
+
+// A configured but unreachable endpoint must fail visibly instead of enabling
+// push mode and holding every branch forever waiting for impossible nonce
+// correlation.
+const unreachable = new OpencodeDriver({
+  serverUrl: "http://127.0.0.1:4599",
+  correlationTimeoutMs: 10,
+  fetchImpl: async () => { throw new Error("connect ECONNREFUSED 127.0.0.1:4599"); },
+});
+unreachable.start();
+unreachable.registerHole("hole-unreachable", "hole-unreachable");
+await rejectsSoon(
+  unreachable.driveBranch(
+    { holeId: "hole-unreachable" },
+    { status: "branch_request", session_id: "sess-unreachable", request_id: "req-unreachable", question: "Do not hang" }
+  ),
+  /did not correlate.*4599/i
+);
+unreachable.stop();
+
+// Delivery failure must be visible on the pending card and detach the agent;
+// logging alone leaves the canvas claiming that work is still queued forever.
+const failedPush = new OpencodeDriver({ serverUrl: "http://127.0.0.1:4599" });
+failedPush.driveBranch = async () => { throw new Error("OpenCode endpoint is unreachable"); };
+setOpencodeDriverForTesting(failedPush);
+const failedSession = new RabbitholeSession({
+  holeId: "hole-failed-push",
+  title: "Failed push",
+  rootId: "root",
+  nodes: [{
+    id: "root", parent_id: null, title: "Root", markdown: "Root", position: { x: 0, y: 0 },
+    size: null, font_scale: 1, collapsed: false, status: "answered", read: true,
+    created_at: new Date().toISOString(),
+  }],
+  isResume: false,
+  renderPage: () => "",
+});
+failedSession.handleBranchRequest({
+  parent_id: "root", request_id: "req-failed-push", node_id: "node-failed-push", question: "Reach me",
+});
+await new Promise((resolve) => setTimeout(resolve, 0));
+const failedNodeEvent = failedSession.outboundEvents.map((entry) => entry.data).find((event) => event.type === "node_error");
+assert.equal(failedNodeEvent?.node_id, "node-failed-push", "push failure marks the pending card with an error");
+assert.equal(failedNodeEvent?.code, "opencode_delivery_failed");
+assert.equal(failedSession.agentAttached, false, "push failure marks the agent detached");
+failedSession.close("test_complete");
+await failedSession.saveChain.flush();
+resetOpencodeDriverForTesting();
+
+// Reopening a hole from a new OpenCode conversation must replace the old
+// correlation. Until the new tool result arrives, branches wait rather than
+// being injected into the dead conversation.
+const reopenedPosts = [];
+const reopened = new OpencodeDriver({
+  serverUrl: "http://127.0.0.1:9999",
+  idleTimeoutMs: 50,
+  fetchImpl: async (url, init) => {
+    reopenedPosts.push({ url, body: JSON.parse(String(init.body)) });
+    return { ok: true };
+  },
+});
+reopened.registerHole("hole-reopened", "hole-reopened");
+reopened.handleEvent({ type: "message.part.updated", properties: { sessionID: "ses-old", part: { type: "tool", state: { output: "hole-reopened" } } } });
+assert.equal(reopened.resolveSession("hole-reopened")?.sessionID, "ses-old");
+reopened.registerHole("hole-reopened", "hole-reopened");
+assert.equal(reopened.resolveSession("hole-reopened"), null, "reopening invalidates the stale conversation correlation");
+const reopenedDelivery = reopened.driveBranch(
+  { holeId: "hole-reopened" },
+  { status: "branch_request", session_id: "sess-reopened", request_id: "req-reopened", question: "Use the new conversation" }
+);
+await new Promise((resolve) => setTimeout(resolve, 10));
+assert.equal(reopenedPosts.length, 0, "a reopened branch is not sent to the stale conversation");
+reopened.handleEvent({ type: "message.part.updated", properties: { sessionID: "ses-new", part: { type: "tool", state: { output: "hole-reopened" } } } });
+await new Promise((resolve) => setTimeout(resolve, 10));
+assert.match(reopenedPosts[0].url, /\/session\/ses-new\/prompt_async$/, "the reopened branch is sent to the current conversation");
+reopened.handleEvent({ type: "session.idle", properties: { sessionID: "ses-new" } });
+await reopenedDelivery;
+reopened.stop();
+
+// A transient prompt endpoint failure retries the same request rather than
+// leaving the canvas waiting for an answer the agent never received.
+let retryAttempts = 0;
+let retryConfirmed = 0;
+const retried = new OpencodeDriver({
+  serverUrl: "http://127.0.0.1:9999",
+  idleTimeoutMs: 50,
+  promptRetryDelayMs: 1,
+  fetchImpl: async () => {
+    retryAttempts += 1;
+    return { ok: retryAttempts > 1, status: retryAttempts > 1 ? 204 : 503 };
+  },
+});
+retried.registerHole("hole-retry", "hole-retry");
+retried.handleEvent({ type: "message.part.updated", properties: { sessionID: "ses-retry", part: { type: "tool", state: { output: "hole-retry" } } } });
+const retryDelivery = retried.driveBranch(
+  { holeId: "hole-retry" },
+  { status: "branch_request", session_id: "sess-retry", request_id: "req-retry", question: "Retry me" },
+  () => { retryConfirmed += 1; }
+);
+await new Promise((resolve) => setTimeout(resolve, 10));
+assert.equal(retryAttempts, 2, "a transient prompt failure is retried once and then delivered");
+assert.equal(retryConfirmed, 1, "only the successful retry confirms delivery");
+retried.handleEvent({ type: "session.idle", properties: { sessionID: "ses-retry" } });
+await retryDelivery;
+retried.stop();
 
 // ---- OpencodeDriver: per-session prompt serialization ----------------------
 

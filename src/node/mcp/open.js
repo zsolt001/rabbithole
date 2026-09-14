@@ -129,6 +129,12 @@ async function resumeRabbithole(holeId, signal, assets, focus = false) {
   // its tab open) would otherwise sit around shimmering; retire it explicitly.
   closeSessionsForHole(hole.hole_id, "superseded");
 
+  // Session construction immediately requeues persisted asks. In push mode,
+  // invalidate any stale conversation mapping before that can happen so the
+  // driver holds those asks for this open call's fresh nonce correlation.
+  const driver = getOpencodeDriver();
+  if (driver.isActive()) driver.registerHole(hole.hole_id, hole.hole_id);
+
   const session = await createSession({
     holeId: hole.hole_id,
     title: hole.title,
