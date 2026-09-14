@@ -4,6 +4,19 @@ import { log, error as logError } from "../shared/logger.js";
 import { SERVER_INSTRUCTIONS } from "./instructions.js";
 import { toolDefinitions } from "./tools.js";
 import { closeAllSessions } from "./registry.js";
+import { getOpencodeDriver, teardownOpencodeDriver } from "./opencode-driver.js";
+
+// Resolving the driver (and starting its event-stream subscription, when a
+// server URL resolves) happens once at module load, before any tool is
+// registered below — tools.js itself resolves the same singleton to decide
+// its description text, so both must agree on the mode from the same first
+// access. When no OpenCode URL resolves, isActive() is false and start() is
+// a no-op: the rest of this file is unchanged from the blocking-only past.
+const opencodeDriver = getOpencodeDriver();
+if (opencodeDriver.isActive()) {
+  log(`OpenCode push mode active: driving sessions via ${opencodeDriver.serverUrl}`);
+  opencodeDriver.start();
+}
 
 const server = new McpServer(
   { name: "rabbithole", version: "0.1.0" },
@@ -58,6 +71,10 @@ async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   log(`Received ${signal}, shutting down`);
+  // Stop consuming OpenCode's event stream first so no new prompt injection
+  // starts mid-shutdown; sessions are closing anyway so ordering relative to
+  // closeAllSessions otherwise doesn't matter.
+  teardownOpencodeDriver();
   try {
     // Tell every open canvas the agent is gone and flush debounced saves
     // before the event loop dies.

@@ -11,6 +11,7 @@ import { cropPdfFigureToAsset, renderPdfPageToFile } from "../pdf/crop.js";
 import { error as logError } from "../../shared/logger.js";
 import { GenerationIngress } from "./generation-ingress.js";
 import { SessionBroadcast } from "./broadcast.js";
+import { getOpencodeDriver } from "../opencode-driver.js";
 import { rawOrigin, rawPdfExtension } from "./session-values.js";
 
 /** Agent answers, PDF conversion, and saved-work requeueing. */
@@ -165,8 +166,13 @@ export class SessionAnswer extends SessionBroadcast {
     this.broadcast(buildNodeAnsweredEvent(finalNode));
     this.flushSave();
 
-    if (nonBlocking) {
-      return { ok: true, node_id: finalNode.id, request_id: requestId, completed: true, delegated: true };
+    if (nonBlocking || getOpencodeDriver().isActive()) {
+      // Push mode never re-arms waitForEvent (there is no waiter to re-arm —
+      // branches are driven into the agent's live OpenCode session instead),
+      // so a plain, non-delegated final also returns immediately here.
+      // delegated is true only when this request actually was delegated to a
+      // sub-agent (nonBlocking) — a plain push-mode final delegated nothing.
+      return { ok: true, node_id: finalNode.id, request_id: requestId, completed: true, ...(nonBlocking ? { delegated: true } : {}) };
     }
     return this.waitForEvent(signal);
   }
@@ -191,6 +197,12 @@ export class SessionAnswer extends SessionBroadcast {
     this.broadcast(buildNodeAnsweredEvent(this.nodes.get(node.id)));
     this.delivered.add(node.id);
     this.requests.answer(requestId, node.id);
+    if (getOpencodeDriver().isActive()) {
+      // Same cancellation hazard as the branch-answer tail above: in push mode
+      // there is no waiter to re-arm, so blocking here would hang until an
+      // OpenCode step boundary aborts the call.
+      return { ok: true, node_id: node.id, request_id: requestId, completed: true };
+    }
     return this.waitForEvent(signal);
   }
 

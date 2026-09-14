@@ -47,6 +47,29 @@ Then start a fresh agent session and say:
 
 The tool call stays pending while the agent listens for canvas asks. If a client enforces a short MCP tool timeout, raise that client's timeout; saved asks survive disconnects and resume.
 
+### OpenCode (push mode)
+
+OpenCode wires the model turn's abort signal into every MCP call, so a listener that blocks past the turn is cancelled with "agent stopped listening" — the pending-call model above never gets to resume. Rabbithole handles this by running as a **push driver** instead: the tool call returns immediately, and when the canvas produces an ask, the MCP server injects a prompt into your live OpenCode session over HTTP rather than parking on a blocking call.
+
+Enable it by pointing the server at OpenCode's HTTP address with `RABBITHOLE_OPENCODE_URL`. Set OpenCode's `server.port` to the same port so the two agree, and plain `opencode` binds there with no `--port` flag:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "server": { "hostname": "127.0.0.1", "port": 4599 },
+  "mcp": {
+    "rabbithole": {
+      "type": "local",
+      "command": ["npx", "-y", "github:shlokkhemani/rabbithole"],
+      "environment": { "RABBITHOLE_OPENCODE_URL": "http://127.0.0.1:4599" },
+      "enabled": true
+    }
+  }
+}
+```
+
+The URL's port must match `server.port`. Without `RABBITHOLE_OPENCODE_URL` the server stays in the default blocking-listener mode, so this changes nothing for Claude Code, Codex, or other clients.
+
 ## Develop
 
 ```bash

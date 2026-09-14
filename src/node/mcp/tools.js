@@ -1,4 +1,5 @@
 import { openRabbithole, answerBranch, listRabbitholes, readRabbithole, sendToRabbithole } from "./open.js";
+import { getOpencodeDriver } from "./opencode-driver.js";
 import { normalizeBaseUrl } from "../../core/base-url.js";
 import { normalizeId } from "../../core/utils.js";
 import { AUTHORING_VOCABULARY_V1 } from "../../core/prompts/authoring-v1.js";
@@ -83,6 +84,24 @@ async function withProgressKeepalive(run, extra) {
   finally { clearInterval(timer); }
 }
 
+// Decided once at process start (the driver resolves its URL once and never
+// re-resolves), so the description text below — built once when this module
+// loads, not per call — stays consistent with the actual runtime mode. The
+// MCP SDK's registerTool takes a static description; there is no per-call
+// templating hook, so "static, decided at load" is the only option anyway.
+const pushModeActive = getOpencodeDriver().isActive();
+
+const OPEN_PUSH_MODE_NOTE =
+  "This server is running in push mode: once opened, branch questions from the canvas arrive as new " +
+  "prompts in this same conversation instead of being returned from this call. This call returns " +
+  "immediately after opening; do not expect it to block. Call answer_branch when a branch prompt " +
+  "arrives, and its final call also returns immediately — do not call open_rabbithole again for this hole.";
+
+const ANSWER_PUSH_MODE_NOTE =
+  "Push mode: the final call for a non-delegated request also returns immediately here — it does not " +
+  "re-arm a listener. The next branch (if any) arrives as a new prompt in this conversation, not as this " +
+  "call's return value.";
+
 /** @type {any[]} */
 export const toolDefinitions = [
   {
@@ -97,7 +116,8 @@ export const toolDefinitions = [
       "For convert_request, read pages[].image_path in order, follow its inline rules, and stream the transcription through answer_branch; the host handles figure: references. " +
       '{status:"already_listening"} means another call owns delivery, so do not call again. ' +
       'Host cancellation returns {status:"cancelled"}. ' +
-      "session_closed has reason done, server_error, agent_exited, superseded (the hole was opened again), or session_closed.",
+      "session_closed has reason done, server_error, agent_exited, superseded (the hole was opened again), or session_closed." +
+      (pushModeActive ? " " + OPEN_PUSH_MODE_NOTE : ""),
     input: {
       title: z.string().max(2000).describe("Document title (required for a new hole)").optional(),
       content: z.string().max(10485760).describe("Raw markdown for the starting document").optional(),
@@ -112,8 +132,15 @@ export const toolDefinitions = [
         .optional(),
     },
     validateInput: validateOpen,
-    run: ({ title, content, file_path, base_url, hole_id, assets, focus }, extra) =>
-      withProgressKeepalive(() => openRabbithole({
+    run: ({ title, content, file_path, base_url, hole_id, assets, focus }, extra) => {
+      // Push mode never blocks in openRabbithole (see registerPushModeOrWait
+      // in open.js), so the progress-keepalive timer that exists only to keep
+      // a *blocked* call's notifications alive would be pure overhead, and
+      // there is nothing for an AbortSignal to cancel — drop both. The
+      // driver-inactive (Claude Code) path below is byte-for-byte the same
+      // call this always made.
+      const driver = getOpencodeDriver();
+      const call = () => openRabbithole({
         title,
         content,
         filePath: file_path,
@@ -121,8 +148,10 @@ export const toolDefinitions = [
         holeId: normalizeId(hole_id),
         assets,
         focus,
-        signal: extra?.signal,
-      }), extra),
+        signal: driver.isActive() ? undefined : extra?.signal,
+      });
+      return driver.isActive() ? call() : withProgressKeepalive(call, extra);
+    },
   },
   {
     name: "answer_branch",
@@ -130,6 +159,7 @@ export const toolDefinitions = [
       "Answer one pending request in an open Rabbithole.",
       "",
       AUTHORING_VOCABULARY_V1,
+      ...(pushModeActive ? ["", ANSWER_PUSH_MODE_NOTE] : []),
     ].join("\n"),
     input: {
       session_id: z.string().max(200).describe("Active session ID from open_rabbithole"),
@@ -150,8 +180,12 @@ export const toolDefinitions = [
         .optional(),
     },
     validateInput: validateAnswer,
-    run: ({ session_id, request_id, title, content, base_url, assets, partial, delegated }, extra) =>
-      withProgressKeepalive(() => answerBranch({
+    run: ({ session_id, request_id, title, content, base_url, assets, partial, delegated }, extra) => {
+      // Same rationale as open_rabbithole's run above: a push-mode final never
+      // blocks, so keepalive and signal threading are dropped only when the
+      // driver is active; the driver-inactive call shape is unchanged.
+      const driver = getOpencodeDriver();
+      const call = () => answerBranch({
         sessionId: normalizeId(session_id),
         requestId: normalizeId(request_id),
         title,
@@ -160,8 +194,10 @@ export const toolDefinitions = [
         assets,
         partial,
         delegated,
-        signal: extra?.signal,
-      }), extra),
+        signal: driver.isActive() ? undefined : extra?.signal,
+      });
+      return driver.isActive() ? call() : withProgressKeepalive(call, extra);
+    },
   },
   {
     name: "read_rabbithole",
