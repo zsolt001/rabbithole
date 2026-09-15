@@ -9,7 +9,7 @@
 import { serializeForInlineScript } from "../../../core/utils.js";
 import { assembleRabbitholePage } from "../../../core/html/document.js";
 import { markdownContainsBlockType } from "../../../core/blocks.js";
-import { getChartScript, getDompurifyScript, getFrozenClientLiteral, getInlinePdfJsScript, getInlinePdfWorkerScript, getMermaidScript, getUiAssets } from "../../shared/dist-assets.js";
+import { getChartScript, getDompurifyScript, getFrozenClientLiteral, getInlinePdfJsScript, getInlinePdfWorkerScript, getMermaidScript, getTraceScript, getUiAssets } from "../../shared/dist-assets.js";
 import { getCoreHtml } from "./assets.js";
 
 export async function buildCanvasHtml(hydration) {
@@ -19,6 +19,10 @@ export async function buildCanvasHtml(hydration) {
   const { CANVAS_SHELL } = await getCoreHtml();
   const usesPdf = !!hydration?.nodes?.some((node) => node?.extensions?.pdf?.version === 2 && !node.extensions.pdf.converted);
   const usesChart = !!hydration?.nodes?.some((node) => markdownContainsBlockType(node?.markdown, "chart"));
+  // Attached sessions can receive trace/sim nodes after the initial HTML is
+  // served, so their inert carrier must be available before the SSE update.
+  const usesTrace = hydration?.agent_attached === true || !!hydration?.nodes?.some((node) =>
+    markdownContainsBlockType(node?.markdown, "trace") || markdownContainsBlockType(node?.markdown, "sim"));
   const pdfRuntimeCarriers = usesPdf
     ? `<script type="application/vnd.rabbithole+pdfjs" id="rabbithole-pdfjs-runtime">${getInlinePdfJsScript()}</script>
 <script type="application/vnd.rabbithole+pdf-worker" id="rabbithole-pdf-worker-runtime">${getInlinePdfWorkerScript()}</script>`
@@ -33,6 +37,7 @@ export async function buildCanvasHtml(hydration) {
   const bodyHtml = `${CANVAS_SHELL}
 <script type="application/vnd.rabbithole+mermaid" id="rabbithole-mermaid-runtime">${getMermaidScript()}</script>
 ${usesChart ? `<script type="application/vnd.rabbithole+chart" id="rabbithole-chart-runtime">${getChartScript()}</script>` : ""}
+${usesTrace ? `<script type="application/vnd.rabbithole+trace" id="rabbithole-trace-runtime">${getTraceScript()}</script>` : ""}
 ${pdfRuntimeCarriers}
 <script>
 ${getDompurifyScript()}

@@ -5,6 +5,7 @@ import {
   snapshotProjectionUsesChart,
   snapshotProjectionUsesMermaid,
   snapshotProjectionUsesPdf,
+  snapshotProjectionUsesTrace,
 } from "../core/snapshot-html.js";
 import { createSnapshotProjection } from "../core/snapshot-projection.js";
 import { slugifyTitle } from "../core/utils.js";
@@ -23,6 +24,10 @@ function defaultSnapshotHooks() {
     },
     getChartSource: function () {
       const carrier = document.getElementById("rabbithole-chart-runtime");
+      return carrier ? carrier.textContent || "" : "";
+    },
+    getTraceSource: function () {
+      const carrier = document.getElementById("rabbithole-trace-runtime");
       return carrier ? carrier.textContent || "" : "";
     },
     getPdfWorkerSource: function () {
@@ -141,6 +146,7 @@ export async function buildSnapshotProjection() {
   const usesMermaid = snapshotProjectionUsesMermaid(projection);
   const usesChart = snapshotProjectionUsesChart(projection);
   const usesPdf = snapshotProjectionUsesPdf(projection);
+  const usesTrace = snapshotProjectionUsesTrace(projection);
   preparedSources = Object.create(null);
   await Promise.all([
     prepareSource("stylesheet", snapshotHooks.getStylesheetText, ""),
@@ -161,6 +167,12 @@ export async function buildSnapshotProjection() {
     if (!(await prepareSource("chart", snapshotHooks.getChartSource, "")))
       throw new Error("Chart runtime is unavailable for this snapshot");
   }
+  if (usesTrace) {
+    if (typeof snapshotHooks.getTraceSource !== "function")
+      throw new Error("Trace runtime is unavailable for this snapshot");
+    if (!(await prepareSource("trace", snapshotHooks.getTraceSource, "")))
+      throw new Error("Trace runtime is unavailable for this snapshot");
+  }
   if (usesPdf) {
     await Promise.all([
       prepareSource("pdfWorker", snapshotHooks.getPdfWorkerSource, ""),
@@ -175,6 +187,7 @@ export function buildSnapshotHtml(snapshotProjection) {
   const usesMermaid = snapshotProjectionUsesMermaid(snapshotProjection);
   const usesChart = snapshotProjectionUsesChart(snapshotProjection);
   const usesPdf = snapshotProjectionUsesPdf(snapshotProjection);
+  const usesTrace = snapshotProjectionUsesTrace(snapshotProjection);
   const styleText = preparedSource("stylesheet", snapshotHooks.getStylesheetText, "");
   if (!styleText) throw new Error("Frozen stylesheet is unavailable");
   const dompurifySource = preparedSource("dompurify", snapshotHooks.getDompurifySource, extractDompurifySource);
@@ -188,6 +201,7 @@ export function buildSnapshotHtml(snapshotProjection) {
     dompurifySource,
     mermaidSource: usesMermaid ? preparedSource("mermaid", snapshotHooks.getMermaidSource, "") : "",
     chartSource: usesChart ? preparedSource("chart", snapshotHooks.getChartSource, "") : "",
+    traceSource: usesTrace ? preparedSource("trace", snapshotHooks.getTraceSource, "") : "",
     pdfWorkerSource: usesPdf ? preparedSource("pdfWorker", snapshotHooks.getPdfWorkerSource, "") : "",
     pdfJsSource: usesPdf ? preparedSource("pdfJs", snapshotHooks.getPdfJsSource, "") : "",
     frozenClientSource: frozenClient,

@@ -91,6 +91,8 @@ export function startRabbithole(hydration, options) {
           return mountPdfView(container, node, { getTranscriptionCapability: options.getPdfTranscriptionCapability });
         },
         loadMermaid: options.loadMermaid || null,
+        loadChart: options.loadChart || null,
+        loadTrace: options.loadTrace || null,
         exportSnapshot: downloadSnapshot,
         exportPortable: options.exportPortable || null,
         canvasMaintenanceFactory: function () {

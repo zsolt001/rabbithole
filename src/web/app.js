@@ -17,6 +17,7 @@ import { applyTheme, toggleTheme } from "../ui/preferences.js";
 import { createWhimsicalHoleId, holeIdFromPathname, pathnameForHole } from "./hole-id.js";
 import { getMermaidSource, loadMermaidRuntime } from "./mermaid-runtime.js";
 import { getChartSource, loadChartRuntime } from "./chart-runtime.js";
+import { getTraceSource, loadTraceRuntime } from "./trace-runtime.js";
 import {
   getDompurifySource,
   getFrozenClientSource,
@@ -793,6 +794,7 @@ async function mountHole(hole, { replace = false } = {}) {
     getPdfJsSource: getFrozenPdfJsSource,
     getMermaidSource,
     getChartSource,
+    getTraceSource,
     getStylesheetText: getFrozenStylesheet,
   });
 
@@ -834,6 +836,7 @@ async function mountHole(hole, { replace = false } = {}) {
       exportPortable: exportCurrentRabbithole,
       loadMermaid: loadMermaidRuntime,
       loadChart: loadChartRuntime,
+      loadTrace: loadTraceRuntime,
       getPdfTranscriptionCapability: () => currentPdfTranscriptionCapability,
     });
     const isNewRailItem = !railSummaries?.some((summary) => summary.hole_id === hole.hole_id);

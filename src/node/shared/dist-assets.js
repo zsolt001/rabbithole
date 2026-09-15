@@ -7,6 +7,7 @@ import { createSourceReader, devEnabled } from "../mcp/http/assets.js";
 const CLIENT_PATH = new URL("../../../dist/client.js", import.meta.url);
 const FROZEN_CLIENT_PATH = new URL("../../../dist/frozen-client.js", import.meta.url);
 const CHART_RUNTIME_PATH = new URL("../../../dist/chart-runtime.js", import.meta.url);
+const TRACE_RUNTIME_PATH = new URL("../../../dist/trace-runtime.js", import.meta.url);
 const KATEX_CSS_PATH = new URL("../../../dist/katex.css", import.meta.url);
 const CANVAS_CSS_PATH = new URL("../../../dist/canvas.css", import.meta.url);
 const require = createRequire(import.meta.url);
@@ -30,6 +31,7 @@ const readCanvasCss = createSourceReader(CANVAS_CSS_PATH);
 const readClient = createSourceReader(CLIENT_PATH);
 const readFrozenClient = createSourceReader(FROZEN_CLIENT_PATH);
 const readChartRuntime = createSourceReader(CHART_RUNTIME_PATH);
+const readTraceRuntime = createSourceReader(TRACE_RUNTIME_PATH);
 
 export async function getUiAssets() {
   if (UI_ASSETS) return UI_ASSETS;
@@ -43,6 +45,7 @@ export async function getUiAssets() {
 export const getDompurifyScript = memoizedTransform(createSourceReader(DOMPURIFY_SCRIPT_PATH), escapeScriptClose);
 export const getMermaidScript = memoizedTransform(createSourceReader(MERMAID_SCRIPT_PATH), escapeScriptClose);
 export const getChartScript = memoizedTransform(readChartRuntime, escapeScriptClose);
+export const getTraceScript = memoizedTransform(readTraceRuntime, escapeScriptClose);
 export const getPdfWorkerScript = createSourceReader(PDF_WORKER_PATH);
 export const getPdfJsScript = createSourceReader(PDFJS_PATH);
 export const getFrozenClientLiteral = memoizedTransform(readFrozenClientSource, serializeForInlineScript);

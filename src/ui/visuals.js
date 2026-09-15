@@ -6,6 +6,7 @@ import { normalizeBlockAnchor } from "../core/hole/anchor.js";
 import { iconSvg } from "../core/html/icons.js";
 import { BUTTON_OPEN, buttonGroupMarkup } from "../core/html/markup.js";
 import { simulate } from "../core/system-simulation.js";
+import { deriveTracePresentation } from "../core/trace-presentation.js";
 import { escapeHtml, slugifyTitle } from "../core/utils.js";
 import { createCleanupScope } from "./kit/scope.js";
 import { disposeLightbox, openLightbox } from "./lightbox.js";
@@ -21,6 +22,7 @@ let mermaidControllers = [];
 let mermaidThemeObserver = null;
 let mermaidGeneration = 0;
 let chartRuntimePromise = null;
+let traceRuntimePromise = null;
 const utf8Decoder = typeof TextDecoder === "function" ? new TextDecoder("utf-8") : null;
 
 function loadEmbeddedMermaidRuntime() {
@@ -49,6 +51,19 @@ function loadEmbeddedChartRuntime() {
   return window.RabbitholeChartRuntime;
 }
 
+function loadEmbeddedTraceRuntime() {
+  if (window.RabbitholeTraceRuntime) return window.RabbitholeTraceRuntime;
+  const carrier = document.getElementById("rabbithole-trace-runtime");
+  if (!carrier || !carrier.textContent) throw new Error("Trace runtime is unavailable");
+  const script = document.createElement("script");
+  script.setAttribute("data-rabbithole-runtime", "trace");
+  script.textContent = carrier.textContent;
+  (document.head || document.body || document.documentElement).appendChild(script);
+  script.remove();
+  if (!window.RabbitholeTraceRuntime) throw new Error("Trace runtime failed to initialize");
+  return window.RabbitholeTraceRuntime;
+}
+
 function defaultVisualHooks() {
   return {
     post: function () {
@@ -69,6 +84,7 @@ function defaultVisualHooks() {
     },
     loadMermaid: loadEmbeddedMermaidRuntime,
     loadChart: loadEmbeddedChartRuntime,
+    loadTrace: loadEmbeddedTraceRuntime,
   };
 }
 /** @type {any} */
@@ -100,6 +116,7 @@ export function disposeVisuals() {
   mermaidControllers = [];
   mermaidGeneration += 1;
   chartRuntimePromise = null;
+  traceRuntimePromise = null;
   if (mermaidThemeObserver) mermaidThemeObserver.disconnect();
   mermaidThemeObserver = null;
 }
@@ -486,37 +503,15 @@ function buildChartVisual(model) {
 }
 
 function buildTraceVisual(model) {
-  const actors = model.actors
-    .map(
-      (actor) =>
-        '<div class="rh-trace-actor" data-actor="' +
-        escapeHtml(actor.id) +
-        '" data-actor-type="' +
-        escapeHtml(actor.type) +
-        '"><strong>' +
-        escapeHtml(actor.label) +
-        "</strong><span>" +
-        escapeHtml(actor.type) +
-        "</span>" +
-        (actor.type === "queue" && actor.capacity
-          ? '<div class="rh-trace-queue-meter" role="progressbar" aria-label="' +
-            escapeHtml(`${actor.label} queue depth`) +
-            '" aria-valuemin="0" aria-valuemax="' +
-            actor.capacity +
-            '" aria-valuenow="0"><i></i></div>'
-          : "") +
-        "<output>0" +
-        (actor.type === "queue" && actor.capacity ? ` / ${actor.capacity}` : "") +
-        "</output></div>",
-    )
-    .join("");
   return (
-    '<section class="rh-trace"><div class="rh-trace-actors">' +
-    actors +
-    '</div><div class="rh-trace-caption" aria-live="polite"></div><div class="rh-trace-controls">' +
+    '<section class="rh-trace" role="region" aria-label="' +
+    escapeHtml(model.title || "System trace") +
+    '"><header><strong>' +
+    escapeHtml(model.title || "System trace") +
+    '</strong><span class="rh-trace-position"></span></header><div class="rh-trace-stage"><span class="rh-trace-loading">Laying out trace…</span></div><div class="rh-trace-caption" aria-live="polite"></div><div class="rh-trace-controls">' +
     buttonGroupMarkup([
-      { bare: true, content: "Previous", dataAttrs: { trace: "previous" } },
       { bare: true, content: "Play", dataAttrs: { trace: "play" } },
+      { bare: true, content: "Previous", dataAttrs: { trace: "previous" } },
       { bare: true, content: "Next", dataAttrs: { trace: "next" } },
     ]) +
     '<input type="range" min="0" max="' +
@@ -525,51 +520,212 @@ function buildTraceVisual(model) {
   );
 }
 
+function traceGraph(presentation, compact) {
+  return {
+    id: "root",
+    layoutOptions: {
+      "elk.algorithm": "layered",
+      "elk.direction": compact ? "DOWN" : "RIGHT",
+      "elk.edgeRouting": "SPLINES",
+      "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
+      "elk.layered.crossingMinimization.forceNodeModelOrder": "true",
+      "elk.spacing.nodeNode": compact ? "18" : "30",
+      "elk.layered.spacing.nodeNodeBetweenLayers": compact ? "54" : "110",
+      "elk.padding": "[top=16,left=16,bottom=16,right=16]",
+    },
+    children: presentation.nodes.map((node) => ({ id: node.id, width: 150, height: 76 })),
+    edges: presentation.edges
+      .filter((edge) => edge.layout)
+      .map((edge) => ({ id: edge.id, sources: [edge.from], targets: [edge.to] })),
+  };
+}
+
+function traceSvgElement(name, attributes = {}) {
+  const element = document.createElementNS("http://www.w3.org/2000/svg", name);
+  for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
+  return element;
+}
+
+function tracePath(section) {
+  const points = [section.startPoint, ...(section.bendPoints || []), section.endPoint];
+  return points.map((point, index) => `${index ? "L" : "M"}${point.x},${point.y}`).join(" ");
+}
+
+function transientTracePath(edge, layouts) {
+  const source = layouts.get(edge.from);
+  const target = layouts.get(edge.to);
+  const start = { x: source.x + source.width / 2, y: source.y + source.height / 2 };
+  const end = { x: target.x + target.width / 2, y: target.y + target.height / 2 };
+  const bend = Math.max(28, Math.abs(end.x - start.x) * 0.18);
+  return `M${start.x},${start.y} C${start.x - bend},${start.y + bend} ${end.x + bend},${end.y + bend} ${end.x},${end.y}`;
+}
+
+function loadTraceRuntime() {
+  if (!traceRuntimePromise) {
+    traceRuntimePromise = Promise.resolve()
+      .then(() => visualHooks.loadTrace())
+      .then((runtime) => {
+        if (!runtime || typeof runtime.layout !== "function") throw new Error("Trace runtime does not expose layout()");
+        return runtime;
+      })
+      .catch((error) => {
+        traceRuntimePromise = null;
+        throw error;
+      });
+  }
+  return traceRuntimePromise;
+}
+
+function traceNodeStatus(frame, node) {
+  if (frame.activeNodes.includes(node.id) && frame.type === "retry") return "retry";
+  return frame.statuses[node.id] || node.initialState;
+}
+
+function buildTraceSvg(presentation, layout) {
+  const svg = traceSvgElement("svg", {
+    viewBox: `0 0 ${layout.width} ${layout.height}`,
+    role: "img",
+    "aria-label": presentation.title,
+    preserveAspectRatio: "xMidYMid meet",
+  });
+  const edgeLayer = traceSvgElement("g", { class: "rh-trace-edges" });
+  const nodeLayer = traceSvgElement("g", { class: "rh-trace-nodes" });
+  const token = traceSvgElement("circle", { class: "rh-trace-token", r: 7, hidden: "" });
+  const paths = new Map();
+  for (const edge of layout.edges || []) {
+    if (!edge.sections?.[0]) continue;
+    const path = traceSvgElement("path", {
+      class: "rh-trace-edge",
+      "data-edge": edge.id,
+      d: tracePath(edge.sections[0]),
+    });
+    paths.set(edge.id, path);
+    edgeLayer.appendChild(path);
+  }
+  const layouts = new Map((layout.children || []).map((node) => [node.id, node]));
+  for (const edge of presentation.edges.filter((candidate) => !candidate.layout)) {
+    const path = traceSvgElement("path", {
+      class: "rh-trace-edge is-transient",
+      "data-edge": edge.id,
+      d: transientTracePath(edge, layouts),
+    });
+    paths.set(edge.id, path);
+    edgeLayer.appendChild(path);
+  }
+  for (const node of presentation.nodes) {
+    const placed = layouts.get(node.id);
+    const group = traceSvgElement("g", {
+      class: "rh-trace-node",
+      "data-node": node.id,
+      transform: `translate(${placed.x} ${placed.y})`,
+      tabindex: "0",
+      role: "group",
+      "aria-label": `${node.label}, ${node.type}`,
+    });
+    const rect = traceSvgElement("rect", { width: placed.width, height: placed.height, rx: 12 });
+    const label = traceSvgElement("text", {
+      x: placed.width / 2,
+      y: 31,
+      "text-anchor": "middle",
+      class: "rh-trace-node-label",
+    });
+    label.textContent = node.label;
+    const type = traceSvgElement("text", {
+      x: placed.width / 2,
+      y: 52,
+      "text-anchor": "middle",
+      class: "rh-trace-node-type",
+    });
+    type.textContent = node.type;
+    const status = traceSvgElement("circle", { cx: placed.width - 14, cy: 14, r: 6, class: "rh-trace-node-status" });
+    const count = traceSvgElement("text", {
+      x: placed.width / 2,
+      y: 68,
+      "text-anchor": "middle",
+      class: "rh-trace-node-count",
+    });
+    group.append(rect, label, type, status, count);
+    nodeLayer.appendChild(group);
+  }
+  svg.append(edgeLayer, nodeLayer, token);
+  return { svg, paths, nodeLayer, token };
+}
+
 function wireTrace(root, model) {
   const trace = root.querySelector(".rh-trace");
   if (!trace) return;
+  const presentation = deriveTracePresentation(model);
+  const stage = trace.querySelector(".rh-trace-stage");
   const controls = trace.querySelector(".rh-trace-controls");
   const range = controls.querySelector('input[type="range"]');
   const play = controls.querySelector('[data-trace="play"]');
+  const previous = controls.querySelector('[data-trace="previous"]');
+  const next = controls.querySelector('[data-trace="next"]');
+  const position = trace.querySelector(".rh-trace-position");
   const caption = trace.querySelector(".rh-trace-caption");
   let index = 0;
   let timer = null;
+  let disposed = false;
+  let observer = null;
+  let visual = null;
+  let visible = true;
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
   function stop() {
     if (timer) clearInterval(timer);
     timer = null;
     play.textContent = "Play";
   }
-  function paint(next) {
-    index = Math.max(0, Math.min(model.events.length - 1, next));
+  function paint(nextIndex, animate = false) {
+    index = Math.max(0, Math.min(presentation.frames.length - 1, nextIndex));
+    const frame = presentation.frames[index];
     range.value = String(index);
-    const counts = Object.fromEntries(model.actors.map((actor) => [actor.id, 0]));
-    for (let current = 0; current <= index; current += 1) {
-      const event = model.events[current];
-      if (event.type === "enqueue" && event.target) counts[event.target] += 1;
-      if (event.type === "dequeue" && event.from) counts[event.from] = Math.max(0, counts[event.from] - 1);
-      if (event.type === "start" && event.target) counts[event.target] += 1;
-      if (["complete", "failure", "timeout"].includes(event.type) && event.target)
-        counts[event.target] = Math.max(0, counts[event.target] - 1);
+    position.textContent = `Step ${index + 1} of ${presentation.frames.length}`;
+    previous.disabled = index === 0;
+    next.disabled = index === presentation.frames.length - 1;
+    caption.dataset.eventType = frame.type;
+    caption.textContent = frame.caption;
+    if (!visual) return;
+    for (const edge of presentation.edges) {
+      const path = visual.paths.get(edge.id);
+      if (!path) continue;
+      path.classList.toggle("is-active", frame.activeEdge === edge.id);
+      path.classList.toggle("is-retry", frame.activeEdge === edge.id && frame.type === "retry");
     }
-    for (const actor of model.actors) {
-      const element = trace.querySelector('[data-actor="' + CSS.escape(actor.id) + '"]');
-      element.classList.toggle(
-        "is-active",
-        [model.events[index].from, model.events[index].to, model.events[index].target].includes(actor.id),
+    for (const node of presentation.nodes) {
+      const group = visual.nodeLayer.querySelector(`[data-node="${CSS.escape(node.id)}"]`);
+      group.dataset.status = traceNodeStatus(frame, node);
+      const count = frame.counts[node.id] || 0;
+      group.querySelector(".rh-trace-node-count").textContent = count
+        ? node.type === "queue"
+          ? `${count} buffered`
+          : `${count} active`
+        : "";
+      group.setAttribute(
+        "aria-label",
+        `${node.label}, ${node.type}${count ? `, ${count} ${node.type === "queue" ? "buffered" : "active"}` : ""}, ${traceNodeStatus(frame, node)}`,
       );
-      const count = counts[actor.id];
-      element.querySelector("output").textContent =
-        actor.type === "queue" && actor.capacity ? `${count} / ${actor.capacity}` : String(count);
-      const meter = element.querySelector(".rh-trace-queue-meter");
-      if (meter) {
-        const ratio = Math.min(1, count / actor.capacity);
-        meter.setAttribute("aria-valuenow", String(count));
-        meter.querySelector("i").style.width = `${ratio * 100}%`;
-        meter.classList.toggle("is-full", count >= actor.capacity);
-      }
     }
-    const event = model.events[index];
-    caption.textContent = `${event.at}: ${event.caption || `${event.type} ${event.item || ""}`.trim()}`;
+    const path = frame.activeEdge ? visual.paths.get(frame.activeEdge) : null;
+    if (!path || !frame.movement) {
+      visual.token.setAttribute("hidden", "");
+      return;
+    }
+    visual.token.removeAttribute("hidden");
+    visual.token.classList.toggle("is-retry", frame.type === "retry");
+    const length = path.getTotalLength();
+    const end = path.getPointAtLength(length);
+    visual.token.setAttribute("cx", String(end.x));
+    visual.token.setAttribute("cy", String(end.y));
+    if (animate && !reduceMotion?.matches && visible && visual.token.animate) {
+      const start = path.getPointAtLength(0);
+      visual.token.animate(
+        [
+          { cx: start.x, cy: start.y, opacity: 0.4 },
+          { cx: end.x, cy: end.y, opacity: 1 },
+        ],
+        { duration: 420, easing: "cubic-bezier(.2,.8,.2,1)" },
+      );
+    }
   }
   function onClick(event) {
     const action = event.target.closest?.("[data-trace]")?.dataset.trace;
@@ -579,15 +735,16 @@ function wireTrace(root, model) {
     }
     if (action === "next") {
       stop();
-      paint(index + 1);
+      paint(index + 1, true);
     }
     if (action === "play") {
       if (timer) stop();
       else {
+        if (index === presentation.frames.length - 1) index = -1;
         play.textContent = "Pause";
         timer = setInterval(() => {
-          if (index >= model.events.length - 1) stop();
-          else paint(index + 1);
+          if (!visible || index >= presentation.frames.length - 1) stop();
+          else paint(index + 1, true);
         }, 700);
       }
     }
@@ -598,9 +755,29 @@ function wireTrace(root, model) {
   }
   controls.addEventListener("click", onClick);
   range.addEventListener("input", onInput);
+  if (typeof IntersectionObserver === "function") {
+    observer = new IntersectionObserver((entries) => {
+      visible = entries[0]?.isIntersecting !== false;
+      if (!visible) stop();
+    });
+    observer.observe(trace);
+  }
   paint(0);
+  loadTraceRuntime()
+    .then((runtime) => runtime.layout(traceGraph(presentation, stage.clientWidth < 600)))
+    .then((layout) => {
+      if (disposed) return;
+      visual = buildTraceSvg(presentation, layout);
+      stage.replaceChildren(visual.svg);
+      paint(index);
+    })
+    .catch(() => {
+      if (!disposed) stage.textContent = "Unable to render trace topology.";
+    });
   return function () {
+    disposed = true;
     stop();
+    observer?.disconnect();
     controls.removeEventListener("click", onClick);
     range.removeEventListener("input", onInput);
   };

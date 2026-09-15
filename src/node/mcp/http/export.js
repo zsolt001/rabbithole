@@ -1,10 +1,10 @@
 import fs from "node:fs/promises";
 import { extractNodeAssetRefs } from "../../../core/assets.js";
 import { createSnapshotProjection } from "../../../core/snapshot-projection.js";
-import { buildSnapshotHtml, snapshotProjectionUsesChart, snapshotProjectionUsesMermaid, snapshotProjectionUsesPdf } from "../../../core/snapshot-html.js";
+import { buildSnapshotHtml, snapshotProjectionUsesChart, snapshotProjectionUsesMermaid, snapshotProjectionUsesPdf, snapshotProjectionUsesTrace } from "../../../core/snapshot-html.js";
 import { toPersistedHole } from "../../../core/schema.js";
 import { resolveAsset } from "../store/fs-store.js";
-import { getChartScript, getDompurifyScript, getMermaidScript, getPdfJsScript, getPdfWorkerScript, getUiAssets } from "../../shared/dist-assets.js";
+import { getChartScript, getDompurifyScript, getMermaidScript, getPdfJsScript, getPdfWorkerScript, getTraceScript, getUiAssets } from "../../shared/dist-assets.js";
 
 /** @param {import("../hole-session/session.js").RabbitholeSession} session */
 async function buildSessionSnapshotProjection(session) {
@@ -41,6 +41,7 @@ export async function buildSessionExportHtml(session) {
     dompurifySource: getDompurifyScript(),
     mermaidSource: snapshotProjectionUsesMermaid(snapshotProjection) ? getMermaidScript() : "",
     chartSource: snapshotProjectionUsesChart(snapshotProjection) ? getChartScript() : "",
+    traceSource: snapshotProjectionUsesTrace(snapshotProjection) ? getTraceScript() : "",
     pdfWorkerSource: snapshotProjectionUsesPdf(snapshotProjection) ? getPdfWorkerScript() : "",
     pdfJsSource: snapshotProjectionUsesPdf(snapshotProjection) ? getPdfJsScript() : "",
     frozenClientSource,
