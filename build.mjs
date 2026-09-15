@@ -38,6 +38,7 @@ await Promise.all([
   buildUiBundle("src/ui/entry.js", "client.js", "RabbitholeClient"),
   buildUiBundle("src/ui/frozen-entry.js", "frozen-client.js", "RabbitholeFrozenClient"),
   buildChartRuntime(),
+  buildTraceRuntime(),
   buildCss("index.canvas.css", path.join(absOutdir, "canvas.css")),
   buildCss("index.visual.css", path.join(absOutdir, "visual-block.css")),
   buildKatexCss().then((source) => fs.writeFile(path.join(absOutdir, "katex.css"), source, "utf8")),
@@ -96,6 +97,24 @@ async function buildChartRuntime() {
   const outputPath = path.join(absOutdir, "chart-runtime.js");
   await esbuild.build({
     entryPoints: [path.join(rootDir, "src/chart/runtime.js")],
+    outfile: outputPath,
+    bundle: true,
+    format: "iife",
+    platform: "browser",
+    target: "es2018",
+    minify: true,
+    sourcemap: false,
+    legalComments: "none",
+    logLevel: "silent",
+  });
+  const source = await fs.readFile(outputPath, "utf8");
+  await fs.writeFile(outputPath, source.replace(/<script/gi, "<scr\\x69pt").replace(/<\/script/gi, "<\\/script"), "utf8");
+}
+
+async function buildTraceRuntime() {
+  const outputPath = path.join(absOutdir, "trace-runtime.js");
+  await esbuild.build({
+    entryPoints: [path.join(rootDir, "src/trace/runtime.js")],
     outfile: outputPath,
     bundle: true,
     format: "iife",
@@ -201,9 +220,10 @@ async function buildWebApp(assetDir) {
     buildMermaidScript(),
     fs.readFile(path.join(assetDir, "frozen-client.js"), "utf8"),
     fs.readFile(path.join(assetDir, "chart-runtime.js"), "utf8"),
+    fs.readFile(path.join(assetDir, "trace-runtime.js"), "utf8"),
     fs.readFile(path.join(assetDir, "canvas.css"), "utf8"),
   ]);
-  const [, [katexCss, dompurify, mermaid, frozenClient, chartRuntime, canvasCss]] = await Promise.all([
+  const [, [katexCss, dompurify, mermaid, frozenClient, chartRuntime, traceRuntime, canvasCss]] = await Promise.all([
     Promise.all([appBuild, copyPdfAssets(webDist), buildCss("index.web.css", path.join(webDist, "styles.css"))]),
     sources,
   ]);
@@ -215,6 +235,7 @@ async function buildWebApp(assetDir) {
     fs.writeFile(path.join(webDist, "mermaid.js"), mermaid, "utf8"),
     fs.writeFile(path.join(webDist, "frozen-client.js"), frozenClient, "utf8"),
     fs.writeFile(path.join(webDist, "chart-runtime.js"), chartRuntime, "utf8"),
+    fs.writeFile(path.join(webDist, "trace-runtime.js"), traceRuntime, "utf8"),
     fs.writeFile(path.join(webDist, "frozen-styles.css"), frozenStyles, "utf8"),
     fs.writeFile(path.join(webDist, "favicon.svg"), faviconSvg(), "utf8"),
   ]);

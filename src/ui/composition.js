@@ -90,6 +90,8 @@ export function createRabbitholeUi({ hydration, host, capabilities } = {}) {
       },
     };
     if (typeof capabilities.loadMermaid === "function") visualRuntimeHooks.loadMermaid = capabilities.loadMermaid;
+    if (typeof capabilities.loadChart === "function") visualRuntimeHooks.loadChart = capabilities.loadChart;
+    if (typeof capabilities.loadTrace === "function") visualRuntimeHooks.loadTrace = capabilities.loadTrace;
     initVisuals(visualRuntimeHooks);
     own(disposeCore);
     own(function () {

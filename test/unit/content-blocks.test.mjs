@@ -9,7 +9,7 @@ import { encodeBase64Utf8, renderMarkdownToHtml } from "../../src/core/markdown.
 import { createMarkdownRenderer } from "../../src/core/markdown-renderer.js";
 import { getBlockType, listBlockTypes, markdownContainsBlockType, normalizeBlockIds, registerBlockType } from "../../src/core/blocks.js";
 import { buildCanvasHtml } from "../../src/node/html/canvas.js";
-import { getDompurifyScript, getMermaidScript, getPdfJsScript, getPdfWorkerScript } from "../../src/node/html/built-assets.js";
+import { getDompurifyScript, getMermaidScript, getPdfJsScript, getPdfWorkerScript, getTraceScript } from "../../src/node/html/built-assets.js";
 import { buildCheckVisual, mountVisuals, registerBlockMount } from "../../src/ui/visuals.js";
 
 function count(haystack, needle) {
@@ -510,6 +510,7 @@ async function assertPageAssembly() {
   assert(html.includes('<script type="application/vnd.rabbithole+mermaid" id="rabbithole-mermaid-runtime">'));
   assert.equal(count(html, getPdfJsScript()), 0, "ordinary MCP pages should not carry the lazy PDF runtime source");
   assert.equal(count(html, getPdfWorkerScript()), 0, "ordinary MCP pages should not carry the lazy PDF worker source");
+  assert.equal(count(html, getTraceScript()), 0, "ordinary MCP pages should not carry the conditional trace runtime");
   assert.equal(count(html, "<script>"), 1, "page should keep one inline script for the node --check gate");
   assert(html.indexOf(purify) < html.indexOf('\n(function(){\n\t  "use strict";'), "DOMPurify should load before the client runtime");
 
@@ -520,6 +521,33 @@ async function assertPageAssembly() {
   await fs.writeFile(scriptPath, scriptMatch[1], "utf8");
   const check = spawnSync(process.execPath, ["--check", scriptPath], { encoding: "utf8" });
   assert.equal(check.status, 0, check.stderr || check.stdout);
+
+  const traceMarkdown = '```trace\n{"v":1,"actors":[{"id":"api","label":"API","type":"service"},{"id":"jobs","label":"Jobs","type":"queue"}],"events":[{"at":0,"type":"send","from":"api","to":"jobs","item":"request-1"}]}\n```';
+  const traceHtml = await buildCanvasHtml({
+    title: "Trace Content",
+    root_id: "root",
+    nodes: [{ id: "root", markdown: traceMarkdown }],
+  });
+  assert.equal(count(traceHtml, getTraceScript()), 1, "trace MCP pages should embed the runtime exactly once");
+  const simulationHtml = await buildCanvasHtml({
+    title: "Simulation Content",
+    root_id: "root",
+    nodes: [{ id: "root", markdown: '```sim\n{"v":1}\n```' }],
+  });
+  assert.equal(count(simulationHtml, getTraceScript()), 1, "simulation MCP pages should embed the trace runtime exactly once");
+  const attachedHtml = await buildCanvasHtml({
+    title: "Attached Session",
+    root_id: "root",
+    agent_attached: true,
+    nodes: [{ id: "root", markdown: "Plain prose before the agent responds." }],
+  });
+  assert.equal(count(attachedHtml, getTraceScript()), 1, "attached MCP pages should anticipate trace nodes delivered after hydration");
+  const nestedHtml = await buildCanvasHtml({
+    title: "Nested Example",
+    root_id: "root",
+    nodes: [{ id: "root", markdown: '````markdown\n```trace\n{}\n```\n````' }],
+  });
+  assert.equal(count(nestedHtml, getTraceScript()), 0, "nested trace examples should not load the runtime");
 
   console.log("ok page assembly: DOMPurify inline once and assembled script parses");
 }
