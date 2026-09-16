@@ -33,7 +33,6 @@ export const CANVAS_SHELL = `
          reader is the current card maximized. You enter by expanding a card
          and leave through Back to canvas in the session cluster (or Esc). -->
     <span class="tb-group" data-mode="reader">
-      ${iconButtonMarkup({ id: "reader-parent", title: "Go to parent · Backspace", ariaLabel: "Go to parent", aria: { keyshortcuts: "Backspace" }, disabled: true, svgIconHtml: iconSvg("parent") })}
       <!-- Per-card, like the ⋯ menu's Text size stepper. "Reading size" now
            names the global scale that lives behind the gear. -->
       ${buttonMarkup({ id: "r-textdown", title: "Decrease text size", ariaLabel: "Decrease text size", label: "A−" })}
@@ -53,6 +52,8 @@ export const CANVAS_SHELL = `
     <!-- The way back from a maximized document: sits left of the shared
          session controls and only exists while the reader is up. -->
     <div class="tb-pill" id="tb-restore-pill">
+      ${buttonMarkup({ id: "reader-parent", title: "Back to parent · Backspace", ariaLabel: "Back to parent", aria: { keyshortcuts: "Backspace" }, disabled: true, label: "Back to parent", svgIconHtml: iconSvg("parent") })}
+      <span class="sep" aria-hidden="true"></span>
       ${buttonMarkup({ id: "reader-restore", title: "Back to canvas · Esc", ariaLabel: "Back to canvas", label: "Back to canvas", svgIconHtml: iconSvg("contract") })}
     </div>
     <div class="tb-pill">

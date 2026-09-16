@@ -187,10 +187,9 @@ body.agent-down .stream-caret, body.session-over .stream-caret { animation: none
 body.mode-canvas #reader { display: none; }
 #reader-workspace { display: flex; flex: 1; min-height: 0; border-top: 1px solid var(--border); }
 #reader-document { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; }
-/* The way back lives in the taskbar's session cluster (left of share/theme/
-   settings) and only exists while a document is maximized. The button IS the
-   capsule — no pill padding around it — so there is no dead zone and hover
-   lights the whole control wall to wall, never an inset around the label. */
+/* Reader navigation lives together in the taskbar's session cluster (left of
+   share/theme/settings) and only exists while a document is maximized. The
+   capsule groups document parentage with the way out to the canvas. */
 body.mode-canvas #tb-restore-pill { display: none; }
 #tb-restore-pill { padding: 0; transition: border-color var(--duration-fast) var(--ease-standard); }
 #tb-restore-pill .tool-btn { height: calc(var(--control-h-xs) + 2 * var(--taskbar-pill-pad-block)); padding-block: 0; padding-inline: 12px; border-radius: 9px; }

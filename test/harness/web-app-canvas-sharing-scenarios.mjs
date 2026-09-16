@@ -4240,8 +4240,8 @@ async function verifyCanvasBranching() {
   assert.equal(await page.locator('.crumb[aria-current="page"]').evaluate((crumb) => crumb.__s9Identity), "child-crumb", "breadcrumb child identity should survive lineage removal and restoration");
 
   const parentControl = page.locator("#reader-parent");
-  assert.deepEqual(await parentControl.evaluate((button) => ({ disabled: button.disabled, name: button.getAttribute("aria-label"), shortcuts: button.getAttribute("aria-keyshortcuts") })),
-    { disabled: false, name: "Go to parent", shortcuts: "Backspace" },
+  assert.deepEqual(await parentControl.evaluate((button) => ({ disabled: button.disabled, name: button.getAttribute("aria-label"), shortcuts: button.getAttribute("aria-keyshortcuts"), label: button.textContent.trim() })),
+    { disabled: false, name: "Back to parent", shortcuts: "Backspace", label: "Back to parent" },
     "a nested reader must expose an enabled parent control with the matching Backspace shortcut");
   await parentControl.click();
   await page.waitForFunction(() => document.querySelector('.crumb[aria-current="page"]')?.textContent === "Web Smoke");
