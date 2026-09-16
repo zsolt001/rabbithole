@@ -33,6 +33,7 @@ export const CANVAS_SHELL = `
          reader is the current card maximized. You enter by expanding a card
          and leave through Back to canvas in the session cluster (or Esc). -->
     <span class="tb-group" data-mode="reader">
+      ${iconButtonMarkup({ id: "reader-parent", title: "Go to parent · Backspace", ariaLabel: "Go to parent", aria: { keyshortcuts: "Backspace" }, disabled: true, svgIconHtml: iconSvg("parent") })}
       <!-- Per-card, like the ⋯ menu's Text size stepper. "Reading size" now
            names the global scale that lives behind the gear. -->
       ${buttonMarkup({ id: "r-textdown", title: "Decrease text size", ariaLabel: "Decrease text size", label: "A−" })}

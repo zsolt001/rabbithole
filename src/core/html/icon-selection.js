@@ -9,6 +9,7 @@
 export const ICON_SELECTIONS = Object.freeze({
   "new": "add-circle-outline",
   "canvas": "git-branch-outline",
+  "parent": "return-up-back-outline",
   "zoom-out": "remove-outline",
   "zoom-in": "add-outline",
   "frame": "scan-outline",
