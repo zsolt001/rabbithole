@@ -251,7 +251,7 @@ function disposeReaderResources(resetHooks) {
 }
 
 function updateParentControl() {
-  const control = document.getElementById("reader-parent");
+  const control = /** @type {HTMLButtonElement} */ (document.getElementById("reader-parent"));
   const node = nodes[currentNodeId];
   control.disabled = !(node && node.parent_id && nodes[node.parent_id]);
 }
