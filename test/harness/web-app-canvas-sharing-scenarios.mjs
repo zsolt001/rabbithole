@@ -3849,6 +3849,13 @@ async function verifyCanvasBranching() {
   await page.waitForSelector(".card .viz-show");
   await assertCodeCopy(page, { scope: ".card.root .doc-content", rawCode: smokeCode, label: "web Canvas" });
 
+  await page.evaluate(() => document.querySelector(".card.root [aria-label='Expand document']").click());
+  await page.waitForFunction(() => !document.body.classList.contains("mode-canvas"));
+  assert.equal(await page.isDisabled("#reader-parent"), true,
+    "the root reader must disable its parent control");
+  await page.evaluate(() => document.getElementById("reader-restore").click());
+  await page.waitForFunction(() => document.body.classList.contains("mode-canvas"));
+
   const rootDrawer = page.locator(".card.root .nc-handle");
   const rootDrawerId = await rootDrawer.getAttribute("aria-controls");
   assert.equal(await rootDrawer.getAttribute("aria-expanded"), "false", "card drawer handle should expose its closed disclosure state");
@@ -4231,6 +4238,16 @@ async function verifyCanvasBranching() {
   await page.keyboard.press("Enter");
   await page.waitForFunction(() => document.querySelector('.crumb[aria-current="page"]')?.textContent === "Euler branch");
   assert.equal(await page.locator('.crumb[aria-current="page"]').evaluate((crumb) => crumb.__s9Identity), "child-crumb", "breadcrumb child identity should survive lineage removal and restoration");
+
+  const parentControl = page.locator("#reader-parent");
+  assert.deepEqual(await parentControl.evaluate((button) => ({ disabled: button.disabled, name: button.getAttribute("aria-label"), shortcuts: button.getAttribute("aria-keyshortcuts") })),
+    { disabled: false, name: "Go to parent", shortcuts: "Backspace" },
+    "a nested reader must expose an enabled parent control with the matching Backspace shortcut");
+  await parentControl.click();
+  await page.waitForFunction(() => document.querySelector('.crumb[aria-current="page"]')?.textContent === "Web Smoke");
+  await streamedSidebarTile.focus();
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => document.querySelector('.crumb[aria-current="page"]')?.textContent === "Euler branch");
 
   const contextStrip = page.locator('.reader-context[role="link"]');
   assert.deepEqual(await contextStrip.evaluate((strip) => ({ tabIndex: strip.tabIndex, name: strip.getAttribute("aria-label") })),

@@ -77,6 +77,7 @@ const ICON_DEFINITIONS = Object.freeze({
   rail: { size: 16, ...RAIL_PANEL },
   new: ionicon(ICON_SELECTIONS.new, 16),
   canvas: ionicon(ICON_SELECTIONS.canvas, 16),
+  parent: ionicon(ICON_SELECTIONS.parent, 16),
   "zoom-out": ionicon(ICON_SELECTIONS["zoom-out"], 16),
   "zoom-in": ionicon(ICON_SELECTIONS["zoom-in"], 16),
   frame: ionicon(ICON_SELECTIONS.frame, 16),

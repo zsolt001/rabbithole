@@ -11,6 +11,8 @@ body {
 
 .tool-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--control-gap); background: none; border: none; color: var(--fg-dim); cursor: pointer; font: inherit; font-size: var(--text-body); padding: var(--space-2) var(--control-pad-x-compact); border-radius: var(--radius-control); white-space: nowrap; transition: var(--transition-color); }
 .tool-btn:hover { color: var(--fg-bold); background: var(--hl); }
+.tool-btn:disabled { color: var(--fg-faint); cursor: default; opacity: 0.5; }
+.tool-btn:disabled:hover { background: none; color: var(--fg-faint); }
 .tool-btn:focus { outline: none; }
 .tool-btn:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 .tool-btn svg { display: block; width: 16px; height: 16px; flex-shrink: 0; }

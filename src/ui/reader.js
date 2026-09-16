@@ -101,6 +101,7 @@ export function openNode(id) {
   kbdMarkIdx = -1;
   renderBreadcrumb();
   renderReaderBody();
+  updateParentControl();
   if (transferredPosition) {
     restoreContentPosition(readerMain, transferredPosition);
     nodes[id]._scrollTop = readerMain.scrollTop;
@@ -213,6 +214,10 @@ export function initReader(hooks) {
     readerScope.listen(document.getElementById("r-textup"), "click", function () {
       changeNodeFontScale(nodes[currentNodeId], 0.1);
     });
+    readerScope.listen(document.getElementById("reader-parent"), "click", function () {
+      const node = nodes[currentNodeId];
+      if (node && node.parent_id && nodes[node.parent_id]) jumpToOrigin(node, "button");
+    });
     // Back to canvas lives in the taskbar's session cluster. It collapses the
     // reader back into its card and hands focus to the card's expand button,
     // so keyboard travel round-trips cleanly.
@@ -243,6 +248,12 @@ function disposeReaderResources(resetHooks) {
   breadcrumbNodes = {};
   noteNodes = {};
   kbdMarkIdx = -1;
+}
+
+function updateParentControl() {
+  const control = document.getElementById("reader-parent");
+  const node = nodes[currentNodeId];
+  control.disabled = !(node && node.parent_id && nodes[node.parent_id]);
 }
 
 export function renderReaderBody() {
