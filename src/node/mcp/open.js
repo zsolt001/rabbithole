@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { log } from "../shared/logger.js";
 import { buildCanvasHtml } from "./http/page.js";
 import { createSession, getSession, getSessionByHole, closeSessionsForHole } from "./registry.js";
+import { getOpencodeDriver } from "./opencode-driver.js";
 import { addAssetsToHole, defaultFsStore } from "./store/fs-store.js";
 import { deriveNodeBaseUrl, normalizeBaseUrl } from "../../core/base-url.js";
 import { normalizeBlockIds } from "../../core/blocks.js";
@@ -83,7 +84,7 @@ export async function openRabbithole({ title, content, filePath, holeId, baseUrl
     renderPage: (hydration) => buildCanvasHtml(hydration),
   });
 
-  return session.waitForEvent(signal);
+  return registerPushModeOrWait(session, signal);
 }
 
 async function resumeRabbithole(holeId, signal, assets, focus = false) {
@@ -93,7 +94,7 @@ async function resumeRabbithole(holeId, signal, assets, focus = false) {
     const addedAssets = await addAssetsToHole(liveSession.holeId, assets);
     for (const asset of addedAssets) liveSession.assetNames.add(asset.name);
     if (focus) liveSession.focusBrowser();
-    return liveSession.waitForEvent(signal);
+    return registerPushModeOrWait(liveSession, signal);
   }
 
   await addAssetsToHole(holeId, assets);
@@ -140,7 +141,20 @@ async function resumeRabbithole(holeId, signal, assets, focus = false) {
     renderPage: (hydration) => buildCanvasHtml(hydration),
   });
 
-  return session.waitForEvent(signal);
+  return registerPushModeOrWait(session, signal);
+}
+
+function registerPushModeOrWait(session, signal) {
+  const driver = getOpencodeDriver();
+  if (!driver.isActive()) return session.waitForEvent(signal);
+  driver.registerHole(session.holeId);
+  return {
+    status: "listening",
+    mode: "push",
+    session_id: session.id,
+    hole_id: session.holeId,
+    instruction: "Push mode is active: canvas branches are delivered as injected OpenCode prompts.",
+  };
 }
 
 /**

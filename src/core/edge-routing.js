@@ -44,9 +44,9 @@ function compact(points) {
  * Route one connector through deterministic orthogonal candidates.
  * @param {{ x: number, y: number }} start
  * @param {{ x: number, y: number }} end
- * @param {{ obstacles?: { minX: number, minY: number, maxX: number, maxY: number }[], routes?: { x: number, y: number }[][] }} [options]
+ * @param {{ obstacles?: { minX: number, minY: number, maxX: number, maxY: number }[], routes?: { x: number, y: number }[][], preferTwoElbows?: boolean, preferVerticalDeparture?: boolean }} [options]
  */
-export function routeConnector(start, end, { obstacles = [], routes = [] } = {}) {
+export function routeConnector(start, end, { obstacles = [], routes = [], preferTwoElbows = false, preferVerticalDeparture = false } = {}) {
   const xs = new Set([(start.x + end.x) / 2]);
   const ys = new Set([(start.y + end.y) / 2]);
   for (const rect of obstacles) {
@@ -55,12 +55,18 @@ export function routeConnector(start, end, { obstacles = [], routes = [] } = {})
     ys.add(rect.minY - CLEARANCE);
     ys.add(rect.maxY + CLEARANCE);
   }
-  const candidates = [
-    [start, { x: end.x, y: start.y }, end],
-    [start, { x: start.x, y: end.y }, end],
-  ];
-  for (const x of xs) candidates.push([start, { x, y: start.y }, { x, y: end.y }, end]);
-  for (const y of ys) candidates.push([start, { x: start.x, y }, { x: end.x, y }, end]);
+  const candidates = preferTwoElbows && (start.y !== end.y || start.x !== end.x)
+    ? []
+    : [
+        [start, { x: end.x, y: start.y }, end],
+        [start, { x: start.x, y: end.y }, end],
+      ];
+  if (!preferVerticalDeparture) {
+    for (const x of xs) candidates.push([start, { x, y: start.y }, { x, y: end.y }, end]);
+  }
+  if (!preferTwoElbows || preferVerticalDeparture) {
+    for (const y of ys) candidates.push([start, { x: start.x, y }, { x: end.x, y }, end]);
+  }
   /** @type {{ points: { x: number, y: number }[], key: (number | string)[] } | null} */
   let best = null;
   for (const raw of candidates) {

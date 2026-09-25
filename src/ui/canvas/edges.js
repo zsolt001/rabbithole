@@ -116,10 +116,11 @@ export function edgeStart(p, child, side, measureCache) {
   return { x: ax != null ? ax : p.position.x + p.size.w / 2, y: p.position.y, anchored: anchored };
 }
 
-export function edgeEnd(n, side, measureCache) {
+export function edgeEnd(n, side, measureCache, alignedY = null) {
   const nh = edgeMeasure(n, measureCache).h;
-  if (side === "left") return { x: n.position.x, y: n.position.y + nh / 2 };
-  if (side === "right") return { x: n.position.x + n.size.w, y: n.position.y + nh / 2 };
+  const sideY = alignedY == null ? n.position.y + nh / 2 : clamp(n.position.y + 14, n.position.y + nh - 14, alignedY);
+  if (side === "left") return { x: n.position.x, y: sideY };
+  if (side === "right") return { x: n.position.x + n.size.w, y: sideY };
   if (side === "top") return { x: n.position.x + n.size.w / 2, y: n.position.y };
   return { x: n.position.x + n.size.w / 2, y: n.position.y + nh };
 }
@@ -194,7 +195,7 @@ export function drawEdgeSubset(ids, positionNodeIds) {
 export function renderEdge(parent, child, measureCache, routed = []) {
   const sides = edgeSides(parent, child, measureCache);
   const start = edgeStart(parent, child, sides[0], measureCache);
-  const end = edgeEnd(child, sides[1], measureCache);
+  const end = edgeEnd(child, sides[1], measureCache, sides[0] === "left" || sides[0] === "right" ? start.y : null);
   const obstacles = Object.values(nodes)
     .filter(function (node) {
       return node.id !== parent.id && node.id !== child.id && node.el && isVisible(node);
@@ -209,7 +210,16 @@ export function renderEdge(parent, child, measureCache, routed = []) {
         maxY: node.position.y + h,
       };
     });
-  const points = routeConnector(start, end, { obstacles: obstacles, routes: routed });
+  const horizontal = sides[0] === "left" || sides[0] === "right";
+  const points = routeConnector(start, end, {
+    obstacles: obstacles,
+    routes: routed,
+    // Both axis-aligned anchor pairs leave in their own direction, jog across
+    // the other axis, then arrive in the target's direction. That produces a
+    // consistent three-segment relationship instead of a hooked connection.
+    preferTwoElbows: true,
+    preferVerticalDeparture: !horizontal,
+  });
   routed.push(points);
   const d = roundedOrthogonalPath(points);
   const geom = { d: d, cx: String(start.x), cy: String(start.y), anchored: !!start.anchored };

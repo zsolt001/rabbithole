@@ -8,6 +8,7 @@ import { closeAllSessions } from "./registry.js";
 import { formatToolSuccess } from "./tool-result.js";
 import { AI_IMAGES_PREF_KEY, readImagesEnabled } from "./images-setting.js";
 import { onPreferencesMerged } from "./store/prefs-store.js";
+import { getOpencodeDriver, teardownOpencodeDriver } from "./opencode-driver.js";
 
 // package.json is the single source of truth for the release version.
 const require = createRequire(import.meta.url);
@@ -20,6 +21,11 @@ function getErrorMessage(err) {
 }
 
 export async function main() {
+  const opencodeDriver = getOpencodeDriver();
+  if (opencodeDriver.isActive()) {
+    log(`OpenCode push mode active: driving sessions via ${opencodeDriver.serverUrl}`);
+    opencodeDriver.start();
+  }
   const enabled = await readImagesEnabled();
   server = new McpServer(
     { name: "rabbithole", version: require("../../../package.json").version },
@@ -83,6 +89,7 @@ async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   log(`Received ${signal}, shutting down`);
+  teardownOpencodeDriver();
   stopPreferences?.();
   stopPreferences = null;
   try {

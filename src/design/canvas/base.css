@@ -254,8 +254,13 @@ body.mode-canvas #tb-restore-pill { display: none; }
 .reader-workflow { min-height: 28px; margin: -10px 0 18px; font-family: var(--font-ui); }
 .workflow-status { display: inline-flex; align-items: center; min-height: 18px; padding: 1px 7px; border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--fg-dim); background: var(--card-bg); font-family: var(--font-ui); font-size: var(--text-xs-plus); font-weight: var(--weight-medium); line-height: 1.2; white-space: nowrap; }
 .workflow-status::before { width: 6px; height: 6px; margin-right: 5px; border: 1px solid currentColor; border-radius: 50%; content: ""; }
+.workflow-status-queued { color: var(--fg-faint); }
+.workflow-status-drawing, .workflow-status-thinking, .workflow-status-streaming { color: color-mix(in srgb, var(--accent) 88%, var(--fg-bold)); }
+.workflow-status-needs-review { color: var(--warn); }
+.workflow-status-delegated { color: color-mix(in srgb, var(--accent) 62%, var(--warn)); }
 .workflow-status-failed { color: var(--danger); }
-.workflow-status-needs-review { color: var(--accent); }
+.workflow-status-reviewed { color: color-mix(in srgb, var(--accent) 48%, var(--success)); }
+.workflow-status-done { color: var(--fg-dim); }
 .workflow-status-done::before { border-radius: 1px; background: currentColor; }
 .workflow-status-note::before { border-radius: 0; transform: rotate(45deg); }
 .workflow-subtree { color: var(--fg-faint); font-family: var(--font-ui); font-size: var(--text-xs-plus); white-space: nowrap; }
@@ -410,6 +415,17 @@ span.pinned-pin { cursor: default; }
 .card-head { position: relative; display: flex; align-items: center; padding: var(--space-4) var(--space-6); background: var(--card-head-bg); border-bottom: var(--border-default); border-radius: var(--radius-card) var(--radius-card) 0 0; cursor: grab; user-select: none; flex-shrink: 0; }
 .card-head:active { cursor: grabbing; }
 .card-title { font-size: var(--text-sm-plus); font-weight: var(--weight-semibold); letter-spacing: 0.01em; color: var(--fg-bold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+/* Workflow state colors the entire window chrome: title, review badge, and
+   window controls stay together on one tinted header rather than competing. */
+.card:has(> .card-head > .workflow-status-queued) { --card-head-bg: color-mix(in srgb, var(--fg-faint) 8%, var(--card-head)); }
+.card:has(> .card-head > .workflow-status-drawing),
+.card:has(> .card-head > .workflow-status-thinking),
+.card:has(> .card-head > .workflow-status-streaming) { --card-head-bg: color-mix(in srgb, var(--accent) 18%, var(--card-head)); }
+.card:has(> .card-head > .workflow-status-needs-review) { --card-head-bg: color-mix(in srgb, var(--warn) 22%, var(--card-head)); }
+.card:has(> .card-head > .workflow-status-delegated) { --card-head-bg: color-mix(in srgb, var(--warn) 12%, var(--card-head)); }
+.card:has(> .card-head > .workflow-status-failed) { --card-head-bg: color-mix(in srgb, var(--danger) 12%, var(--card-head)); }
+.card:has(> .card-head > .workflow-status-reviewed) { --card-head-bg: color-mix(in srgb, var(--success) 12%, var(--card-head)); }
+.card:has(> .card-head > .workflow-status-done) { --card-head-bg: color-mix(in srgb, var(--fg-dim) 13%, var(--card-head)); }
 .card-head > .workflow-status { margin-left: 8px; margin-right: 92px; flex: 0 0 auto; }
 @media (hover: none) { .card-head > .workflow-status { margin-right: 0; } }
 .card-title[contenteditable] { outline: none; cursor: text; user-select: text; -webkit-user-select: text; }

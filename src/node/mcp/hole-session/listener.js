@@ -1,6 +1,7 @@
 import { buildMap, buildUndeliveredThread, collectBranchNotes, collectNewNotes } from "../../../core/hole/context.js";
 import { openBrowser } from "../../shared/process.js";
-import { log } from "../../shared/logger.js";
+import { log, error as logError } from "../../shared/logger.js";
+import { getOpencodeDriver } from "../opencode-driver.js";
 import { noteHashesForNodes, notesFromContextEntries, recordDeliveredNoteEntries } from "../note-hashes.js";
 import { SessionBase } from "./session-base.js";
 
@@ -67,6 +68,17 @@ export class SessionListener extends SessionBase {
       waiter.resolve(this.deliverToAgent(event));
       return;
     }
+    const driver = getOpencodeDriver();
+    if (driver.isActive() && event.status === "branch_request") {
+      if (event.node_id) this.queuedNodeIds.add(event.node_id);
+      const delivered = this.deliverToAgent(event, { deferClaim: true });
+      driver.driveBranch(this, delivered, () => this.confirmAgentDelivery(event)).catch((error) => {
+        logError(`OpenCode branch delivery failed: ${error.message}`);
+        if (event.node_id) this.queuedNodeIds.delete(event.node_id);
+        this.setAgentAttached(false, "stalled");
+      });
+      return;
+    }
     this.queue.push(event);
     if (event.status === "branch_request" && event.node_id) {
       this.queuedNodeIds.add(event.node_id);
@@ -76,7 +88,7 @@ export class SessionListener extends SessionBase {
 
   // Every branch_request handed to the agent arms the watchdog; any subsequent
   // agent activity (answer_branch, another waitForEvent) clears or re-arms it.
-  deliverToAgent(baseEvent) {
+  deliverToAgent(baseEvent, { deferClaim = false } = {}) {
     if (!baseEvent) return baseEvent;
     const event = { ...baseEvent };
     // Branch work carries both identities: session_id routes answers to this
@@ -110,13 +122,17 @@ export class SessionListener extends SessionBase {
       // Keep the undecorated event for fresh, idempotent redelivery. The map,
       // note delta, thread, and hole id above are a delivery-time projection.
       this.requests.deliver(event.request_id, baseEvent);
-      if (event.status === "branch_request" && this.queuedNodeIds.delete(event.node_id)) {
-        this.broadcast({ type: "node_work_state", node_id: event.node_id, state: "thinking" });
-      }
-      this.startAnswerWatchdog(event.request_id);
-      this.setContextBusy(true);
+      if (!deferClaim) this.confirmAgentDelivery(event);
     }
     return event;
+  }
+
+  confirmAgentDelivery(event) {
+    if (event.status === "branch_request" && this.queuedNodeIds.delete(event.node_id)) {
+      this.broadcast({ type: "node_work_state", node_id: event.node_id, state: "thinking" });
+    }
+    this.startAnswerWatchdog(event.request_id);
+    this.setContextBusy(true);
   }
 
   nextInFlightBranchRequest() {

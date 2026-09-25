@@ -11,6 +11,7 @@ import { cropPdfFigureToAsset, renderPdfPageToFile } from "../pdf/crop.js";
 import { error as logError } from "../../shared/logger.js";
 import { GenerationIngress } from "./generation-ingress.js";
 import { SessionBroadcast } from "./broadcast.js";
+import { getOpencodeDriver } from "../opencode-driver.js";
 import { rawOrigin, rawPdfExtension } from "./session-values.js";
 
 /** Agent answers, PDF conversion, and saved-work requeueing. */
@@ -174,9 +175,16 @@ export class SessionAnswer extends SessionBroadcast {
     this.broadcast(buildNodeAnsweredEvent(finalNode));
     this.flushSave();
 
-    if (nonBlocking) {
-      return { ok: true, node_id: finalNode.id, request_id: requestId, completed: true, delegated: true };
+    if (nonBlocking || getOpencodeDriver().isActive()) {
+      return {
+        ok: true,
+        node_id: finalNode.id,
+        request_id: requestId,
+        completed: true,
+        ...(nonBlocking ? { delegated: true } : {}),
+      };
     }
+    if (getOpencodeDriver().isActive()) return { ok: true, node_id: node.id, request_id: requestId, completed: true };
     return this.waitForEvent(signal);
   }
 

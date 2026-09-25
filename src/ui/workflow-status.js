@@ -39,7 +39,7 @@ function workflowBadgeText(node, status, aggregate) {
     aggregate.counts.streaming;
   if (active) return ownLabel + " · " + active + " active";
   if (aggregate.counts["needs-review"]) return ownLabel + " · " + aggregate.counts["needs-review"] + " review";
-  return ownLabel + " · " + descendants + " below";
+  return ownLabel + " · " + descendants + " branches";
 }
 
 function workflowDisplayLabel(node, status) {

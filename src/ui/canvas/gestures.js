@@ -26,6 +26,12 @@ export function layoutNode(node) {
       el.style.height = node.size.h + "px";
       el.style.minHeight = "";
       el.style.maxHeight = "";
+    } else if (node.view?.manual_size) {
+      // Defaults stay content-hugging; a user-resized branch becomes a fixed
+      // scrollable viewport so both growing and shrinking have visible effect.
+      el.style.height = node.size.h + "px";
+      el.style.minHeight = "";
+      el.style.maxHeight = "";
     } else {
       el.style.height = "auto";
       el.style.minHeight = "";
@@ -190,11 +196,17 @@ export function enableResize(node, handle) {
       return !nodePin(node);
     },
     anchor: function (n) {
-      return { x: n.position.x + n.size.w, y: n.position.y + n.size.h };
+      // Untouched branch cards hug their content and use size.h only as a
+      // ceiling. Anchor to the visible corner so the first resize drag does
+      // not jump them down to that saved ceiling before following the pointer.
+      const card = canvasCard(n);
+      const height = card?.offsetHeight || n.size.h;
+      return { x: n.position.x + n.size.w, y: n.position.y + height };
     },
     apply: function (n, x, y) {
       n.size.w = Math.max(240, x - n.position.x);
       n.size.h = Math.max(160, y - n.position.y);
+      n.view = { ...(n.view || {}), manual_size: true };
     },
   });
 }
