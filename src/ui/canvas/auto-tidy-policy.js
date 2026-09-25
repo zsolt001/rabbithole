@@ -1,5 +1,6 @@
-import { isDockedNote } from "../../core/hole/ask.js";
+import { isDockedNote, isNoteNode } from "../../core/hole/ask.js";
 import { nodeNeedsReading } from "../../core/hole/node.js";
+import { nodeIsExplicitlyDone } from "../../core/hole/workflow.js";
 
 function nodeAt(collection, id) {
   return collection instanceof Map ? collection.get(id) : collection && collection[id];
@@ -63,8 +64,15 @@ export function decideAutoTidyFolds(ribIds, clocks, nodeCollection, childNodesOf
       const node = pending.pop();
       if (!node || seen.has(node.id) || node._ephemeral || isDockedNote(node)) continue;
       seen.add(node.id);
+      if (isNoteNode(node)) {
+        (childNodesOf(node.id) || []).forEach(function (entry) {
+          pending.push(typeof entry === "string" ? nodeAt(nodeCollection, entry) : entry);
+        });
+        continue;
+      }
       exempt = !!(
         nodeNeedsReading(node) ||
+        !nodeIsExplicitlyDone(node) ||
         nodePinned(node) ||
         node.status === "pending" ||
         node.source?.converting ||

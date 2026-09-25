@@ -1,5 +1,5 @@
 import { systemClock } from "../core/clock.js";
-import { BRANCH_FOLLOWUP, BRANCH_SELECTION } from "../core/hole/ask.js";
+import { BRANCH_FOLLOWUP, BRANCH_SELECTION, isDockedNote } from "../core/hole/ask.js";
 import { truncate } from "../core/hole/lens.js";
 import { makeNode } from "../core/hole/node.js";
 import {
@@ -22,6 +22,7 @@ import {
   currentNodeId,
   flashHint,
   frozen,
+  isVisible,
   mode,
   motionSourceFromEvent,
   nextOrder,
@@ -867,6 +868,9 @@ function subtreeBounds(node) {
 function placeChild(parent, branchType) {
   return sharedPlaceChild(parent, branchType, {
     childrenOf: placedChildrenOf,
+    placedNodes: Object.values(nodes).filter(function (node) {
+      return !isDockedNote(node) && isVisible(node);
+    }),
     effH: effH,
     sort: nodeOrder,
     childSize: DEFAULT_CHILD,

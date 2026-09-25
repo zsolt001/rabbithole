@@ -66,6 +66,7 @@ export function nodeNeedsReading(node) {
     node &&
     node.status === "answered" &&
     node.origin?.kind !== "note" &&
+    !node.extensions?.review?.done_at &&
     !node.extensions?.attention?.seen_at
   );
 }
@@ -74,6 +75,7 @@ export function nodeNeedsReading(node) {
 export function stripNodeAttention(extensions) {
   const next = { ...(extensions || {}) };
   delete next.attention;
+  delete next.review;
   return next;
 }
 
@@ -197,7 +199,7 @@ function joinLegacyExtensions(node, target) {
   if (target !== "snapshot" && Object.keys(normalizeObject(node.progress)).length) extensions.learn = cloneJson(node.progress);
   if (target === "snapshot") {
     for (const name of Object.keys(extensions)) {
-      if (!["pdf", "note", "canvas", "attention"].includes(name)) delete extensions[name];
+      if (!["pdf", "note", "canvas", "attention", "review"].includes(name)) delete extensions[name];
     }
   }
   return extensions;

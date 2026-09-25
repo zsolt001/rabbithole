@@ -2949,7 +2949,7 @@ async function verifyLogicalMarkGrouping() {
     await page.waitForSelector("#ask.visible");
     await page.fill("#ask-text", "Why should this whole range highlight?");
     await page.click('#ask .ask-commit[data-commit="ask"]');
-    const groupedCanvasMark = page.locator('.card.root mark[aria-label="Open branch: Grouped mark branch"].mark-ready');
+    const groupedCanvasMark = page.locator('.card.root mark[aria-label^="Open branch: Grouped mark branch, status "].mark-ready');
     await groupedCanvasMark.first().waitFor();
     const groupedId = await groupedCanvasMark.first().getAttribute("data-child");
 
@@ -2957,7 +2957,7 @@ async function verifyLogicalMarkGrouping() {
     await page.waitForSelector("#ask.visible");
     await page.fill("#ask-text", "How does this overlap the larger range?");
     await page.click('#ask .ask-commit[data-commit="ask"]');
-    const overlappingCanvasMark = page.locator('.card.root mark[aria-label="Open branch: Overlapping mark branch"].mark-ready');
+    const overlappingCanvasMark = page.locator('.card.root mark[aria-label^="Open branch: Overlapping mark branch, status "].mark-ready');
     await overlappingCanvasMark.waitFor();
     const overlappingId = await overlappingCanvasMark.getAttribute("data-child");
 
@@ -2965,7 +2965,7 @@ async function verifyLogicalMarkGrouping() {
     await page.waitForSelector("#ask.visible");
     await page.fill("#ask-text", "Why is this mark separate?");
     await page.click('#ask .ask-commit[data-commit="ask"]');
-    const unrelatedCanvasMark = page.locator('.card.root mark[aria-label="Open branch: Unrelated mark branch"].mark-ready');
+    const unrelatedCanvasMark = page.locator('.card.root mark[aria-label^="Open branch: Unrelated mark branch, status "].mark-ready');
     await unrelatedCanvasMark.waitFor();
     const unrelatedId = await unrelatedCanvasMark.getAttribute("data-child");
     assert.equal(providerCalls, 3, "the mark-group fixture should create its grouped, overlapping, and unrelated branches");
@@ -4266,7 +4266,7 @@ async function verifyCanvasBranching() {
     return { id: tile.dataset.child, tabIndex: tile.tabIndex, name: tile.getAttribute("aria-label") };
   });
   assert.equal(pendingSidebarContract.tabIndex, 0, "pending margin notes should be tabbable links");
-  assert.match(pendingSidebarContract.name, /^Open branch: .+, pending$/, "pending margin notes should name the branch and pending state");
+  assert.match(pendingSidebarContract.name, /^Open branch: .+, status Thinking$/, "pending margin notes should name the branch and workflow state");
   const pendingAlignment = await page.evaluate((id) => {
     const tile = document.querySelector(`#margin-notes .side-item[data-child="${id}"]`);
     const mark = document.querySelector(`#reader-main mark[data-child="${id}"]`);
@@ -4285,7 +4285,7 @@ async function verifyCanvasBranching() {
 
   const sidebarTile = streamedSidebarTile;
   assert.deepEqual(await sidebarTile.evaluate((tile) => ({ role: tile.getAttribute("role"), tabIndex: tile.tabIndex, name: tile.getAttribute("aria-label") })),
-    { role: "link", tabIndex: 0, name: "Open branch: Why does this matter?" }, "settled sidebar tiles should expose named link semantics without activity state");
+    { role: "link", tabIndex: 0, name: "Open branch: Why does this matter?, status Needs review" }, "settled sidebar tiles should expose named link semantics with workflow state");
   await sidebarTile.focus();
   await page.keyboard.press("Enter");
   await page.waitForFunction(() => document.querySelector('.crumb[aria-current="page"]')?.textContent === "Euler branch");
@@ -4337,7 +4337,7 @@ async function verifyCanvasBranching() {
 
   const branchMark = page.locator('.card mark[data-child].mark-ready').first();
   assert.deepEqual(await branchMark.evaluate((mark) => ({ tabIndex: mark.tabIndex, role: mark.getAttribute("role"), name: mark.getAttribute("aria-label") })),
-    { tabIndex: 0, role: "link", name: "Open branch: Euler branch" }, "branch marks should expose keyboard navigation semantics and the branch title");
+    { tabIndex: 0, role: "link", name: "Open branch: Euler branch, status Reviewed" }, "branch marks should expose keyboard navigation semantics, branch title, and workflow state");
   await branchMark.hover();
   await page.waitForTimeout(350);
   assert.equal(await page.locator("#peek").count(), 0, "hovering a mark must not raise any peek surface — marks are plain links");

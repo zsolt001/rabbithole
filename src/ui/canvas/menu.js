@@ -1,7 +1,9 @@
 import { isDockedNote, isNoteNode, isReactionNote } from "../../core/hole/ask.js";
+import { deriveWorkflowStatus } from "../../core/hole/workflow.js";
 import { iconButtonMarkup } from "../../core/html/markup.js";
 import { changeNodeFontScale, childrenOf, closed, frozen, resetNodeFontScale, rootId } from "../core.js";
 import { closestEl, qs } from "../dom.js";
+import { canSetWorkflowDone, setWorkflowDone } from "../workflow-status.js";
 import { cancelViewAnimation } from "./camera.js";
 import { cardButton } from "./card-composer.js";
 import { branchAllCollapsed, setBranchCollapsed, setChildrenCollapsed, toggleCollapse } from "./fold.js";
@@ -80,6 +82,10 @@ export function openCardMenu(node, trigger, openedByKeyboard) {
   document.getElementById("cm-rename").style.display = frozen ? "none" : "";
   document.getElementById("cm-convert").style.display =
     canConvertNote(node) && !!(node.markdown || "").trim() ? "" : "none";
+  const doneButton = document.getElementById("cm-done");
+  doneButton.style.display = canSetWorkflowDone(node) ? "" : "none";
+  doneButton.querySelector(".sm-label").textContent =
+    deriveWorkflowStatus(node).id === "done" ? "Mark Not Done" : "Mark Done";
   const pinButton = document.getElementById("cm-pin");
   const showPin = !frozen && canPinWindow(node);
   pinButton.style.display = showPin ? "" : "none";
@@ -109,6 +115,7 @@ export function onCardMenuClick(e) {
   if (button.id === "cm-copy") r.lifecycle.hooks.copyNodeMarkdown(node);
   else if (button.id === "cm-rename") startTitleEditing(node, node.titleEl);
   else if (button.id === "cm-convert") convertNoteToAsk(node, node.markdown);
+  else if (button.id === "cm-done") setWorkflowDone(node, deriveWorkflowStatus(node).id !== "done");
   else if (button.id === "cm-pin") setWindowPinned(node, !nodePin(node));
   else if (button.id.indexOf("cm-collapse") === 0) runCollapseAction(node, button.id.slice(3));
   else if (button.id === "cm-delete") r.lifecycle.hooks.removeBranch(node);

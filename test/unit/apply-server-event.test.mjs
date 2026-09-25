@@ -122,4 +122,21 @@ result = applyServerEvent(store, {
 assert.equal(answered.drawing, false, "work-state changes apply only to pending nodes");
 assert.equal(result.invalidated.has("status"), false, "ignored work-state changes do not invalidate status");
 
+answered.extensions = { attention: { seen_at: 1 }, review: { done_at: 2 }, retained: true };
+result = applyServerEvent(store, {
+  type: "node_answered",
+  node_id: answered.id,
+  title: "Answered again",
+  markdown: "Fresh",
+});
+assert.deepEqual(answered.extensions, { retained: true }, "fresh live answers clear attention and review state");
+result = applyServerEvent(store, {
+  type: "node_extensions_patch",
+  node_id: answered.id,
+  namespace: "review",
+  value: { done_at: 3 },
+});
+assert.deepEqual(answered.extensions["review"], { done_at: 3 });
+assert.equal(result.invalidated.has("status"), true, "review extension patches invalidate workflow status");
+
 console.log("ok apply server event: queued and drawing states reset with the pending-node lifecycle");

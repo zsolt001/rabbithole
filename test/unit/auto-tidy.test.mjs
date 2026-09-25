@@ -77,6 +77,11 @@ assert.equal(
   nodeNeedsReading({ status: "answered", origin: { kind: "ask" }, extensions: { attention: { seen_at: 42 } } }),
   false,
 );
+assert.equal(
+  nodeNeedsReading({ status: "answered", origin: { kind: "ask" }, extensions: { review: { done_at: 42 } } }),
+  false,
+  "explicit completion implies the answer no longer needs reading",
+);
 
 const splitAttention = makeNode({
   id: "split",
@@ -124,9 +129,9 @@ assert.deepEqual(
 );
 
 const policyNodes = {
-  rib: { id: "rib", parent_id: "root", status: "answered", origin: { kind: "ask" }, extensions: { attention: { seen_at: 1 } } },
-  child: { id: "child", parent_id: "rib", status: "answered", origin: { kind: "ask" }, extensions: { attention: { seen_at: 1 } } },
-  ignoredNote: { id: "ignoredNote", parent_id: "rib", status: "pending", origin: { kind: "note" }, view: { docked: true } },
+  rib: { id: "rib", parent_id: "root", status: "answered", origin: { kind: "ask" }, extensions: { attention: { seen_at: 1 }, review: { done_at: 2 } } },
+  child: { id: "child", parent_id: "rib", status: "answered", origin: { kind: "ask" }, extensions: { attention: { seen_at: 1 }, review: { done_at: 2 } } },
+  ignoredNote: { id: "ignoredNote", parent_id: "rib", status: "pending", origin: { kind: "note" } },
   ignoredDraft: { id: "ignoredDraft", parent_id: "rib", status: "pending", origin: { kind: "note" }, _ephemeral: true },
 };
 const policyChildren = (id) => Object.values(policyNodes).filter((node) => node.parent_id === id);
@@ -140,7 +145,7 @@ const dueClock = new Map([["rib", 1000]]);
 assert.deepEqual(
   decideAutoTidyFolds(["rib"], dueClock, policyNodes, policyChildren, 6000, baseFacts),
   [{ id: "rib", reason: "grace_elapsed" }],
-  "a fully read, cold rib is selected with a machine-readable reason",
+  "an explicitly done, cold rib is selected with a machine-readable reason",
 );
 assert.match(
   decideAutoTidyFolds(["rib"], dueClock, policyNodes, policyChildren, 6000, baseFacts)[0].reason,
@@ -151,6 +156,7 @@ const exemptionCases = [
   { label: "grace has not elapsed", clock: new Map([["rib", 1001]]), change: {} },
   { label: "rib is already collapsed", clock: dueClock, change: { rib: { collapsed: true } } },
   { label: "unread node is in subtree", clock: dueClock, change: { child: { extensions: {} } } },
+  { label: "reviewed but not done node is in subtree", clock: dueClock, change: { child: { extensions: { attention: { seen_at: 1 } } } } },
   { label: "pinned node is in subtree", clock: dueClock, change: { facts: { nodePinned: (node) => node.id === "child" } } },
   { label: "pending node is in subtree", clock: dueClock, change: { child: { status: "pending" } } },
   { label: "converting node is in subtree", clock: dueClock, change: { child: { source: { converting: true } } } },

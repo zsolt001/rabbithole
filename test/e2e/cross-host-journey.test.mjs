@@ -605,9 +605,9 @@ function assertProjection(projection, expected) {
   assert.equal(projection.hole.schema_version, 2);
   assertHole(projection.hole, expected.title, expected.rootMarkdown, expected.branchMarkdown);
   assert.deepEqual(Buffer.from(projection.assets["journey.png"], "base64"), expected.asset, `asset bytes differ: ${projection.assets["journey.png"]}`);
-  // A share strips personal extension state; a note's docked flag is how the
-  // page is shaped, so it travels with the page.
-  if (expected.stripExtensions) assert(projection.hole.nodes.every((node) => Object.keys(node.extensions).every((namespace) => namespace === "note")),
+  // A share strips personal extension state; note presentation and explicit
+  // answer completion are document state, so those namespaces travel.
+  if (expected.stripExtensions) assert(projection.hole.nodes.every((node) => Object.keys(node.extensions).every((namespace) => namespace === "note" || namespace === "review")),
     `snapshot projection leaked extensions: ${JSON.stringify(projection.hole.nodes)}`);
   assertNoCredentials(JSON.stringify(projection), "projection");
 }

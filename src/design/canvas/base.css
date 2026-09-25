@@ -250,6 +250,18 @@ body.mode-canvas #tb-restore-pill { display: none; }
 .si-quote { display: block; font-size: var(--text-xs-plus); color: var(--fg-faint); font-style: italic; margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .si-quote[hidden] { display: none; }
 .si-status { font-size: var(--text-xs-plus); color: var(--fg-dim); margin-top: 6px; }
+.si-status, .reader-workflow { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.reader-workflow { min-height: 28px; margin: -10px 0 18px; font-family: var(--font-ui); }
+.workflow-status { display: inline-flex; align-items: center; min-height: 18px; padding: 1px 7px; border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--fg-dim); background: var(--card-bg); font-family: var(--font-ui); font-size: var(--text-xs-plus); font-weight: var(--weight-medium); line-height: 1.2; white-space: nowrap; }
+.workflow-status::before { width: 6px; height: 6px; margin-right: 5px; border: 1px solid currentColor; border-radius: 50%; content: ""; }
+.workflow-status-failed { color: var(--danger); }
+.workflow-status-needs-review { color: var(--accent); }
+.workflow-status-done::before { border-radius: 1px; background: currentColor; }
+.workflow-status-note::before { border-radius: 0; transform: rotate(45deg); }
+.workflow-subtree { color: var(--fg-faint); font-family: var(--font-ui); font-size: var(--text-xs-plus); white-space: nowrap; }
+.workflow-done-action { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 5px 9px; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--fg-dim); background: transparent; font-family: var(--font-ui); font-size: var(--text-xs-plus); cursor: pointer; }
+.workflow-done-action:hover { border-color: var(--border-focus); color: var(--fg-bold); }
+.workflow-done-action:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 .si-muted { color: var(--fg-faint); }
 /* A pending branch streams its last lines live inside its sidebar tile — the
    answer is watchable from the moment the first words arrive. Bottom-aligned
@@ -398,6 +410,8 @@ span.pinned-pin { cursor: default; }
 .card-head { position: relative; display: flex; align-items: center; padding: var(--space-4) var(--space-6); background: var(--card-head-bg); border-bottom: var(--border-default); border-radius: var(--radius-card) var(--radius-card) 0 0; cursor: grab; user-select: none; flex-shrink: 0; }
 .card-head:active { cursor: grabbing; }
 .card-title { font-size: var(--text-sm-plus); font-weight: var(--weight-semibold); letter-spacing: 0.01em; color: var(--fg-bold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+.card-head > .workflow-status { margin-left: 8px; margin-right: 92px; flex: 0 0 auto; }
+@media (hover: none) { .card-head > .workflow-status { margin-right: 0; } }
 .card-title[contenteditable] { outline: none; cursor: text; user-select: text; -webkit-user-select: text; }
 .card-badge { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; margin-right: 7px; flex: 0 0 14px; color: var(--fg-dim); cursor: default; }
 .card-badge svg { display: block; width: 14px; height: 14px; }
@@ -792,7 +806,7 @@ body:not(.mode-canvas) .tb-group[data-mode="canvas"] { display: none; }
    of the flex gap — so an absent part must leave the layout entirely, or every
    row wears a blank pill and every title sits a phantom gap off the snippet. */
 .pal-t > [hidden], .pal-t > :empty { display: none; }
-.pal-t .pal-writing { flex-shrink: 0; font-size: var(--text-xs-plus); color: var(--accent); font-weight: var(--weight-medium); }
+.pal-t .workflow-status { flex-shrink: 0; }
 .pal-s { font-size: var(--text-sm-plus); color: var(--fg-dim); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pal-s mark { background: none; color: var(--fg-bold); font-weight: var(--weight-semibold); }
 .pal-empty { padding: 18px 12px 14px; text-align: center; font-size: var(--text-ui); color: var(--fg-faint); }

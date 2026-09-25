@@ -81,6 +81,7 @@ export function applyServerEvent(store, message, options = {}) {
     else node.extensions = { ...(node.extensions || {}), [message.namespace]: message.value };
     result.namespace = message.namespace;
     invalidated.add(message.namespace === "canvas" ? "presentation" : "document");
+    if (message.namespace === "attention" || message.namespace === "review") invalidated.add("status");
   } else if (type === "pdf_convert_progress") {
     node.markdown = message.markdown || "";
     node._pdfProgress = { done: message.page_done, total: message.page_total };

@@ -383,7 +383,10 @@ function placeAttachedPublishedNote(nodes, rootId, parentId) {
   const childrenOf = (id) => [...nodes.values()]
     .filter((node) => node.parent_id === id)
     .map((node) => layoutNode(node, rootId));
-  return placeChild(layoutNode(nodes.get(parentId), rootId), BRANCH_FOLLOWUP, { childrenOf });
+  const placedNodes = [...nodes.values()]
+    .map((node) => layoutNode(node, rootId))
+    .filter((node) => !isDockedNote(node));
+  return placeChild(layoutNode(nodes.get(parentId), rootId), BRANCH_FOLLOWUP, { childrenOf, placedNodes });
 }
 
 function placeStandalonePublishedNote(nodes, rootId) {

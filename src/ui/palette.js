@@ -1,5 +1,6 @@
 import { isNoteNode } from "../core/hole/ask.js";
 import { truncate } from "../core/hole/lens.js";
+import { deriveSubtreeWorkflow, deriveWorkflowStatus } from "../core/hole/workflow.js";
 import { escapeHtml } from "../core/utils.js";
 import { presetLabelForOrigin } from "./ask-presets.js";
 import {
@@ -10,12 +11,13 @@ import {
   toggleCollapse,
 } from "./canvas/index.js";
 import { r } from "./canvas/runtime.js";
-import { goToNode, mode, motionSourceFromEvent, nodes, paletteEl, palResults, palText } from "./core.js";
+import { childrenOf, goToNode, mode, motionSourceFromEvent, nodes, paletteEl, palResults, palText } from "./core.js";
 import { isCommandEnter } from "./input-intent.js";
 import { createModuleLifecycle } from "./kit/scope.js";
 import { openDialog } from "./primitives/dialog.js";
 import { ensureNodeHtml } from "./renderer.js";
 import { openSettingsSheet } from "./settings-sheet.js";
+import { workflowSummary } from "./workflow-status.js";
 
 function defaultPaletteHooks() {
   return {
@@ -26,6 +28,18 @@ function defaultPaletteHooks() {
 }
 
 const paletteLifecycle = createModuleLifecycle({ defaults: defaultPaletteHooks });
+const STATUS_PRIORITY = Object.freeze({
+  failed: 0,
+  queued: 1,
+  drawing: 1,
+  delegated: 1,
+  streaming: 1,
+  thinking: 1,
+  "needs-review": 2,
+  reviewed: 3,
+  done: 4,
+  note: 5,
+});
 
 // ===========================================================================
 // ⌘K PALETTE — search the whole hole, plus canvas commands when opened there.
@@ -84,6 +98,9 @@ export function togglePalette() {
   if (palOpen) closePalette();
   else openPalette();
 }
+export function refreshOpenPalette() {
+  if (palOpen) renderPalette(palText.value);
+}
 function openPalette() {
   palOpen = true;
   palCanvasCommands = mode === "canvas";
@@ -134,16 +151,37 @@ function renderPalette(q) {
     .filter(function (t) {
       return !!t;
     });
+  const statusFilters = tokens
+    .filter(function (token) {
+      return token.indexOf("status:") === 0;
+    })
+    .map(function (token) {
+      return token.slice(7);
+    });
+  const searchTokens = tokens.filter(function (token) {
+    return token.indexOf("status:") !== 0;
+  });
   let scored = [];
   for (const id in nodes) {
     const n = nodes[id];
     if (n._pendingDelete) continue;
+    const workflowStatus = deriveWorkflowStatus(n);
+    if (
+      statusFilters.length &&
+      !statusFilters.some(function (filter) {
+        if (filter === "working")
+          return ["queued", "drawing", "thinking", "delegated", "streaming"].includes(workflowStatus.id);
+        if (filter === "review") return workflowStatus.id === "needs-review";
+        return filter === workflowStatus.id;
+      })
+    )
+      continue;
     let score = 0,
       ok = true;
     let title = "",
       ask = "",
       body = "";
-    if (tokens.length) {
+    if (searchTokens.length) {
       const rawTitle = n.title || "";
       if (n._searchTitleFor !== rawTitle) {
         n._searchTitleFor = rawTitle;
@@ -163,8 +201,8 @@ function renderPalette(q) {
       }
       body = n._searchBody;
     }
-    for (let i = 0; i < tokens.length; i++) {
-      const t = tokens[i];
+    for (let i = 0; i < searchTokens.length; i++) {
+      const t = searchTokens[i];
       if (title.indexOf(t) !== -1) score += title.indexOf(t) === 0 ? 40 : 30;
       else if (ask.indexOf(t) !== -1) score += 15;
       else if (body.indexOf(t) !== -1) score += 5;
@@ -174,17 +212,21 @@ function renderPalette(q) {
       }
     }
     if (!ok) continue;
-    scored.push({ n: n, score: score });
+    scored.push({ n: n, score: score, status: workflowStatus.id });
   }
   scored.sort(function (a, b) {
-    return b.score - a.score || (b.n._order || 0) - (a.n._order || 0);
+    return (
+      b.score - a.score ||
+      STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status] ||
+      (b.n._order || 0) - (a.n._order || 0)
+    );
   });
   scored = scored.slice(0, 12);
   palItems = [
     ...scored.map(function (s) {
       return { type: "node", id: s.n.id };
     }),
-    ...paletteCommandItems(tokens),
+    ...paletteCommandItems(searchTokens),
   ];
   palSel = 0;
   if (!palItems.length) {
@@ -215,6 +257,7 @@ function renderPalette(q) {
     row._flag.className = "";
     row._badge.hidden = true;
     row._kbd.hidden = true;
+    row.removeAttribute("title");
     row._snippet.hidden = item.type === "command";
     if (item.type === "command") {
       row._title.textContent = item.name;
@@ -226,15 +269,16 @@ function renderPalette(q) {
     const n = nodes[item.id];
     if (!n) return;
     row._title.textContent = n.title || "Untitled";
-    if (n.status === "pending") {
-      row._flag.className = "pal-writing";
-      row._flag.textContent = "writing…";
-    }
+    const workflowStatus = deriveWorkflowStatus(n);
+    const aggregate = deriveSubtreeWorkflow(n, nodes, childrenOf);
+    row._flag.className = "workflow-status workflow-status-" + workflowStatus.id;
+    row._flag.textContent = workflowStatus.shortLabel + (aggregate.total > 1 ? " · " + (aggregate.total - 1) : "");
+    row.title = workflowSummary(n, aggregate);
     if (n.origin && n.origin.lens) {
       row._badge.textContent = presetLabelForOrigin(n.origin);
       row._badge.hidden = false;
     }
-    row._snippet.innerHTML = palSnippet(n, tokens);
+    row._snippet.innerHTML = palSnippet(n, searchTokens);
     fragment.appendChild(row);
   });
   for (let i = palItems.length; i < palRows.length; i++) palRows[i].hidden = true;
@@ -258,7 +302,7 @@ function createPalRow(index) {
   row._kbd.className = "pal-kbd";
   row._snippet = document.createElement("div");
   row._snippet.className = "pal-s";
-  top.append(row._flag, row._title, row._badge, row._kbd);
+  top.append(row._title, row._flag, row._badge, row._kbd);
   row.append(top, row._snippet);
   return row;
 }

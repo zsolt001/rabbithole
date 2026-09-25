@@ -1,5 +1,6 @@
 import { isNoteNode, isReactionNote } from "../core/hole/ask.js";
 import { childrenOf, nodes } from "./core.js";
+import { workflowMarkLabel } from "./workflow-status.js";
 
 const MARK_FRAGMENT_SELECTOR = "mark[data-child], .rh-pdf-mark[data-child]";
 
@@ -115,7 +116,7 @@ export function upgradeMarks(root, childId) {
   if (!root) return;
   const marks = root.querySelectorAll('[data-child="' + childId + '"]');
   const child = nodes[childId],
-    label = "Open branch: " + ((child && child.title) || "Untitled");
+    label = workflowMarkLabel(child);
   for (let i = 0; i < marks.length; i++) {
     marks[i].classList.remove("mark-pending");
     marks[i].classList.add("mark-ready");
@@ -223,7 +224,7 @@ function initializeMark(m, childId, cls) {
     m.setAttribute("aria-label", child.markdown === "👍" ? "Thumbs up reaction" : "Thumbs down reaction");
   } else {
     m.setAttribute("role", "link");
-    m.setAttribute("aria-label", "Open branch: " + ((child && child.title) || "Untitled"));
+    m.setAttribute("aria-label", workflowMarkLabel(child));
   }
   return m;
 }

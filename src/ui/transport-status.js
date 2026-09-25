@@ -42,12 +42,14 @@ import {
   viewAdjusted,
 } from "./core.js";
 import { cancelFrame, nextFrame } from "./kit/scope.js";
+import { refreshOpenPalette } from "./palette.js";
 import { applyPreferencePatch } from "./preferences.js";
 import { renderBreadcrumb, renderMarginNotes, renderReaderBody } from "./reader.js";
 import { refreshNodeHtml } from "./renderer.js";
 import { applyServerEvent } from "./store/apply-server-event.js";
 import { upgradeMarks, wrapInContainer } from "./text-marks.js";
 import { refreshVisualMarks } from "./visuals.js";
+import { refreshWorkflowSurfaces } from "./workflow-status.js";
 
 // ===========================================================================
 // transport
@@ -425,6 +427,11 @@ function renderStreamSurfaces(node, firstChunk) {
   }
 }
 
+function refreshWorkflowUi() {
+  refreshWorkflowSurfaces();
+  refreshOpenPalette();
+}
+
 function handleServer(msg) {
   if (msg.type === "preferences") {
     applyPreferencePatch(msg.values);
@@ -458,6 +465,7 @@ function handleServer(msg) {
   if (result.handled) {
     if (result.type === "node_deleted") {
       removeNodesLocal(result.nodeIds || [], null);
+      refreshWorkflowUi();
       return;
     }
     const node = result.node;
@@ -514,6 +522,7 @@ function handleServer(msg) {
       // Upgrade the inline mark inside the parent's canvas card too.
       const p = nodes[node.parent_id];
       if (p && p.bodyEl) upgradeMarks(p.bodyEl, node.id);
+      refreshWorkflowUi();
     } else if (result.type === "node_progress") {
       if (result.invalidated.has("stream")) scheduleStreamRender(node, result.firstChunk);
     } else if (result.type === "node_work_state") {
@@ -522,14 +531,22 @@ function handleServer(msg) {
       renderStreamSurfaces(node, true);
       updateCardComposer(node);
       refreshOpenStandaloneComposers();
+      refreshWorkflowUi();
     } else if (result.type === "node_extensions_patch") {
       if (result.namespace === "canvas") syncNodeCanvasPresentation(node);
-      else if (result.namespace !== "attention") {
+      else if (result.namespace !== "attention" && result.namespace !== "review") {
         if (node.bodyEl) fillBody(node);
         if (mode === "reader" && currentNodeId === node.id) renderReaderBody();
         updateCardComposer(node);
         refreshOpenStandaloneComposers();
         scheduleEdges();
+      }
+      if (result.namespace === "attention" || result.namespace === "review") {
+        refreshWorkflowUi();
+        if (mode === "reader") {
+          if (currentNodeId === node.id) renderReaderBody();
+          renderMarginNotes();
+        }
       }
     } else if (result.type === "pdf_convert_progress") {
       refreshNodeHtml(node);
@@ -554,6 +571,7 @@ function handleServer(msg) {
           updateComposerState();
         } else if (currentNodeId === node.parent_id) renderMarginNotes();
       }
+      refreshWorkflowUi();
     }
     return;
   }
