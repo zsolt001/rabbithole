@@ -6,6 +6,7 @@ Each description is harvested from the test file's `@protects` declaration.
 
 ## unit
 
+- `test/unit/ai-images-setting.test.mjs` — AI images preference interpretation and runtime copy builders.
 - `test/unit/apply-server-event.test.mjs` — live node work-state projection capability contracts.
 - `test/unit/auto-tidy.test.mjs` — auto-tidy branch selection and preference capability contracts.
 - `test/unit/base-url.test.mjs` — base url capability contracts.
@@ -22,6 +23,7 @@ Each description is harvested from the test file's `@protects` declaration.
 - `test/unit/hole-id.test.mjs` — hole id capability contracts.
 - `test/unit/icons.test.mjs` — icons capability contracts.
 - `test/unit/id-utils.test.mjs` — short id and copied-id normalization capability contracts.
+- `test/unit/input-intent.test.mjs` — keyboard input ownership capability contracts.
 - `test/unit/lifecycle.test.mjs` — lifecycle capability contracts.
 - `test/unit/markdown-renderer.test.mjs` — markdown renderer capability contracts.
 - `test/unit/model-endpoint.test.mjs` — model endpoint capability contracts.
@@ -42,6 +44,7 @@ Each description is harvested from the test file's `@protects` declaration.
 - `test/unit/request-table.test.mjs` — request table capability contracts.
 - `test/unit/subscription-source-guard.test.mjs` — subscription source guard capability contracts.
 - `test/unit/ui-card-presentation.test.mjs` — ui card presentation capability contracts.
+- `test/unit/version.test.mjs` — the release version reaching the CLI, the MCP handshake, and the built browser bundles from package.json alone.
 
 ## contracts
 
@@ -54,6 +57,7 @@ Each description is harvested from the test file's `@protects` declaration.
 - `test/contracts/docs-tour.test.mjs` — The offline, zero-network architecture tour.
 - `test/contracts/fetch-proxy-worker.test.mjs` — fetch proxy worker capability contracts.
 - `test/contracts/filesystem-store.test.mjs` — filesystem store capability contracts.
+- `test/contracts/generate-image.test.mjs` — generate_image MCP contracts.
 - `test/contracts/host-parity.test.mjs` — Shared engine state, persistence, and asset GC parity across the MCP and web host adapters.
 - `test/contracts/indexeddb-store.test.mjs` — indexeddb store capability contracts.
 - `test/contracts/mcp-context-budget.test.mjs` — branch context payload ceilings across the portable corpus and a 50-node note-heavy hole.
@@ -62,6 +66,7 @@ Each description is harvested from the test file's `@protects` declaration.
 - `test/contracts/mcp-markdown-wire.test.mjs` — mcp markdown wire capability contracts.
 - `test/contracts/mcp-read-rabbithole.test.mjs` — read_rabbithole selectors, disk/live delivery state, normalization, and file-root context contracts.
 - `test/contracts/mcp-short-ids.test.mjs` — MCP short-id, legacy-id, and copied-id boundary contracts.
+- `test/contracts/mcp-thread-delta.test.mjs` — delta thread delivery: published nodes are delivered, delegated finals are not, and thread carries only undelivered lineage.
 - `test/contracts/node-projection.test.mjs` — node projection capability contracts.
 - `test/contracts/preferences-wire.test.mjs` — machine preference patch validation and document-boundary capability contracts.
 - `test/contracts/prompts.test.mjs` — prompts capability contracts.
@@ -75,6 +80,7 @@ Each description is harvested from the test file's `@protects` declaration.
 - `test/integration/bridge-failure-modes.test.mjs` — bridge failure modes capability contracts.
 - `test/integration/bridge-http.test.mjs` — bridge http capability contracts.
 - `test/integration/custom-endpoint.test.mjs` — custom endpoint capability contracts.
+- `test/integration/generate-image.test.mjs` — generate_image materialization and session orchestration.
 - `test/integration/generation-lifecycle.test.mjs` — generation lifecycle capability contracts.
 - `test/integration/image-experience.test.mjs` — image experience capability contracts.
 - `test/integration/mcp-rearm.test.mjs` — mcp rearm capability contracts.

@@ -30,6 +30,23 @@ applyServerEvent(store, {
 assert.equal(node.queued, false, "delegation clears queued state");
 assert.equal(node.delegated, true, "delegated work state still marks delegation");
 
+result = applyServerEvent(store, {
+  type: "node_work_state",
+  node_id: node.id,
+  state: "drawing",
+});
+assert.equal(node.drawing, true, "drawing work state marks the pending node as drawing");
+assert.equal(node.queued, false, "drawing work is not queued");
+assert.equal(node.delegated, false, "drawing work is not delegated");
+assert.equal(result.invalidated.has("status"), true, "drawing work state invalidates the status surface");
+
+applyServerEvent(store, {
+  type: "node_work_state",
+  node_id: node.id,
+  state: "thinking",
+});
+assert.equal(node.drawing, false, "thinking clears drawing state");
+
 applyServerEvent(store, {
   type: "node_work_state",
   node_id: node.id,
@@ -46,15 +63,14 @@ assert.equal(node.delegated, false, "thinking work is not delegated");
 applyServerEvent(store, {
   type: "node_work_state",
   node_id: node.id,
-  state: "queued",
+  state: "drawing",
 });
 result = applyServerEvent(store, {
   type: "node_progress",
   node_id: node.id,
   markdown: "Streaming",
 });
-assert.equal(node.queued, false, "streaming progress clears queued state");
-assert.equal(node.delegated, false, "streaming progress clears delegated state");
+assert.equal(node.drawing, false, "streaming progress clears drawing state");
 assert.equal(result.invalidated.has("stream"), true);
 
 applyServerEvent(store, {
@@ -63,14 +79,64 @@ applyServerEvent(store, {
   state: "queued",
 });
 result = applyServerEvent(store, {
+  type: "node_progress",
+  node_id: node.id,
+  markdown: "Still streaming",
+});
+assert.equal(node.queued, false, "streaming progress clears queued state");
+assert.equal(node.delegated, false, "streaming progress clears delegated state");
+
+applyServerEvent(store, {
+  type: "node_work_state",
+  node_id: node.id,
+  state: "drawing",
+});
+result = applyServerEvent(store, {
   type: "node_answered",
   node_id: node.id,
   title: "Answered",
   markdown: "Complete",
 });
+assert.equal(node.drawing, false, "completion clears drawing state");
 assert.equal(node.queued, false, "completion clears queued state");
 assert.equal(node.delegated, false, "completion clears delegated state");
 assert.equal(node.status, "answered");
 assert.equal(result.invalidated.has("status"), true);
 
-console.log("ok apply server event: queued state sets and resets with the pending-node lifecycle");
+const answered = {
+  id: "answered-node",
+  status: "answered",
+  title: "Answered",
+  markdown: "Complete",
+  delegated: false,
+  queued: false,
+  drawing: false,
+  extensions: {},
+};
+store.nodes[answered.id] = answered;
+result = applyServerEvent(store, {
+  type: "node_work_state",
+  node_id: answered.id,
+  state: "drawing",
+});
+assert.equal(answered.drawing, false, "work-state changes apply only to pending nodes");
+assert.equal(result.invalidated.has("status"), false, "ignored work-state changes do not invalidate status");
+
+answered.extensions = { attention: { seen_at: 1 }, review: { done_at: 2 }, retained: true };
+result = applyServerEvent(store, {
+  type: "node_answered",
+  node_id: answered.id,
+  title: "Answered again",
+  markdown: "Fresh",
+});
+assert.deepEqual(answered.extensions, { retained: true }, "fresh live answers clear attention and review state");
+result = applyServerEvent(store, {
+  type: "node_extensions_patch",
+  node_id: answered.id,
+  namespace: "review",
+  value: { done_at: 3 },
+});
+assert.deepEqual(answered.extensions["review"], { done_at: 3 });
+assert.equal(result.invalidated.has("status"), true, "review extension patches invalidate workflow status");
+
+console.log("ok apply server event: queued and drawing states reset with the pending-node lifecycle");

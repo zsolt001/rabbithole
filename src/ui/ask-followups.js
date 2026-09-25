@@ -1,5 +1,5 @@
 import { systemClock } from "../core/clock.js";
-import { BRANCH_FOLLOWUP, BRANCH_SELECTION } from "../core/hole/ask.js";
+import { BRANCH_FOLLOWUP, BRANCH_SELECTION, isDockedNote } from "../core/hole/ask.js";
 import { truncate } from "../core/hole/lens.js";
 import { makeNode } from "../core/hole/node.js";
 import {
@@ -9,15 +9,7 @@ import {
   subtreeBounds as sharedSubtreeBounds,
 } from "../core/layout.js";
 import { presetFor, refreshAskPresetActions, renderAskPresetActions } from "./ask-presets.js";
-import {
-  autoGrowEl,
-  createNodeEl,
-  drawEdges,
-  effH,
-  renderVisibility,
-  revealNode,
-  scheduleEdges,
-} from "./canvas/index.js";
+import { autoGrowEl, createNodeEl, drawEdges, effH, renderVisibility, scheduleEdges } from "./canvas/index.js";
 import { applyComposerState, wireComposerActions } from "./composer-state.js";
 import {
   ask,
@@ -30,6 +22,7 @@ import {
   currentNodeId,
   flashHint,
   frozen,
+  isVisible,
   mode,
   motionSourceFromEvent,
   nextOrder,
@@ -189,6 +182,14 @@ function onAskOwnerKeydown(e) {
 function focusAskOwner(owner) {
   if (!owner || !owner.isConnected) return;
   if (!owner.hasAttribute("tabindex")) owner.setAttribute("tabindex", "-1");
+  owner.setAttribute("data-focus-quiet", "");
+  owner.addEventListener(
+    "blur",
+    function () {
+      owner.removeAttribute("data-focus-quiet");
+    },
+    { once: true },
+  );
   try {
     owner.focus({ preventScroll: true });
   } catch (e) {
@@ -566,7 +567,6 @@ function submitAsk(lensKey, source) {
       wrapInContainer(parent.bodyEl.querySelector(".doc-content"), anchor, childId, "hl mark-pending");
       scheduleEdges();
     }
-    revealNode(node, source);
     if (anchor.block) refreshVisualMarks(parent.id, anchor.block.block_id);
   }
 
@@ -631,7 +631,6 @@ function submitNote(source, placed) {
   const sel = window.getSelection();
   if (sel) sel.removeAllRanges();
   hideAsk();
-  revealNode(node, source);
 }
 
 function submitReaction(reaction) {
@@ -869,6 +868,9 @@ function subtreeBounds(node) {
 function placeChild(parent, branchType) {
   return sharedPlaceChild(parent, branchType, {
     childrenOf: placedChildrenOf,
+    placedNodes: Object.values(nodes).filter(function (node) {
+      return !isDockedNote(node) && isVisible(node);
+    }),
     effH: effH,
     sort: nodeOrder,
     childSize: DEFAULT_CHILD,

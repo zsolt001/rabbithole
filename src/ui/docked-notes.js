@@ -27,6 +27,7 @@ import {
   flashHint,
   frozen,
   goToNode,
+  isVisible,
   mode,
   nextOrder,
   nodes,
@@ -264,6 +265,9 @@ function rollbackCreatedNote(node) {
 function placeNoteChild(parent, branchType) {
   return sharedPlaceChild(parent, branchType, {
     childrenOf: placedChildrenOf,
+    placedNodes: Object.values(nodes).filter(function (node) {
+      return !isDockedNote(node) && isVisible(node);
+    }),
     effH: effH,
     sort: nodeOrder,
     childSize: DEFAULT_CHILD,

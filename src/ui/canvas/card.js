@@ -4,6 +4,7 @@ import { iconButtonMarkup } from "../../core/html/markup.js";
 import { currentNodeId, rootId, shouldReduceMotion, world } from "../core.js";
 import { closestEl } from "../dom.js";
 import { openNode } from "../reader.js";
+import { refreshWorkflowSurfaces, workflowBadge } from "../workflow-status.js";
 import { cancelViewAnimation } from "./camera.js";
 import { buildCardComposer, cardButton, closeCardDrawer, updateCardComposer } from "./card-composer.js";
 import { fillBody } from "./document.js";
@@ -37,6 +38,7 @@ export function createNodeEl(node, enter) {
   titleEl.className = "card-title";
   titleEl.textContent = node.title || "…";
   titleEl.title = node.title || "";
+  const workflowEl = workflowBadge(node);
   const collapseBtn = cardButton(
     iconButtonMarkup({
       bare: true,
@@ -71,6 +73,7 @@ export function createNodeEl(node, enter) {
   acts.appendChild(divider);
   if (!node._ephemeral) acts.appendChild(nodeMenuButton(node));
   head.appendChild(titleEl);
+  head.appendChild(workflowEl);
   head.appendChild(acts);
   const body = document.createElement("div");
   body.className = "card-body";
@@ -85,6 +88,7 @@ export function createNodeEl(node, enter) {
   node.el = el;
   node.bodyEl = body;
   node.titleEl = titleEl;
+  node.workflowEl = workflowEl;
   node.collapseBtn = collapseBtn;
   if (r.cardResizeObserver) r.cardResizeObserver.observe(el);
   fillBody(node);
@@ -158,6 +162,7 @@ export function createNodeEl(node, enter) {
     if (node.ncComp && !node.ncText.value.trim() && document.activeElement !== node.ncText) closeCardDrawer(node);
   });
   layoutNode(node);
+  refreshWorkflowSurfaces();
   if (el.classList.contains("card-enter")) {
     requestAnimationFrame(function () {
       el.classList.add("entered");

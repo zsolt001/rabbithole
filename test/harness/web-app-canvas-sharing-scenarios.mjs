@@ -669,7 +669,7 @@ async function verifyAnchoredNotes() {
     const commandAsk = page.locator(".card:not(.root)", { hasText: "Why is this a command ask?" });
     await commandAsk.waitFor();
     await page.waitForTimeout(350);
-    assert.notDeepEqual(await readCanvasView(page), viewBeforeAsk, "creating an ask must retain its existing viewport reveal behavior");
+    assert.deepEqual(await readCanvasView(page), viewBeforeAsk, "creating an ask must leave the canvas viewport exactly where it was");
     assert.equal(await commandAsk.locator(".loading").count(), 1, "Cmd/Ctrl+Enter should create a pending ask card");
 
     await selectText(page, "restore anchor");
@@ -2202,6 +2202,39 @@ async function verifyStandaloneNotesAndEditing() {
 
     await standaloneAsk.locator('.card-btn[aria-label="Collapse card"]').click();
     assert.equal(await standaloneAsk.evaluate((card) => card.classList.contains("collapsed")), true,
+      "the palette target should start from the ordinary collapsed-card path");
+    await page.keyboard.press("Control+K");
+    await page.fill("#pal-text", "Standalone canvas ask");
+    await page.locator(".pal-item:visible", { hasText: "Standalone canvas ask" }).waitFor();
+    await page.keyboard.press("Enter");
+    await page.evaluate(() => window.__rabbitholeTest.waitForCanvasViewSettled());
+    await page.waitForFunction(async (id) => {
+      const node = (await window.__rabbitholeTest.readStoredHole()).nodes.find((entry) => entry.id === id);
+      return node?.collapsed === false && typeof node.extensions?.attention?.seen_at === "number";
+    }, askDraftState.id);
+    const paletteUnfolded = await page.evaluate(async (id) => {
+      const node = (await window.__rabbitholeTest.readStoredHole()).nodes.find((entry) => entry.id === id);
+      const card = document.querySelector(`.card[data-id="${id}"]`);
+      const body = card?.querySelector(".card-body");
+      const viewport = document.getElementById("viewport")?.getBoundingClientRect();
+      const rect = card?.getBoundingClientRect();
+      return {
+        nodeCollapsed: node?.collapsed,
+        seenAt: node?.extensions?.attention?.seen_at,
+        cardCollapsed: card?.classList.contains("collapsed"),
+        bodyVisible: !!body && getComputedStyle(body).display !== "none",
+        cardWithinViewport: !!rect && !!viewport && rect.left >= viewport.left - 1 && rect.top >= viewport.top - 1
+          && rect.right <= viewport.right + 1 && rect.bottom <= viewport.bottom + 1,
+      };
+    }, askDraftState.id);
+    assert.equal(paletteUnfolded.nodeCollapsed, false, "a palette result should expand the collapsed target in persistence");
+    assert.equal(paletteUnfolded.cardCollapsed, false, "a palette result should remove the target card's collapsed class");
+    assert.equal(paletteUnfolded.bodyVisible, true, "a palette result should make the target body visible");
+    assert.equal(typeof paletteUnfolded.seenAt, "number", "a palette result should write the target's seen ledger");
+    assert.equal(paletteUnfolded.cardWithinViewport, true, "palette navigation should frame the target at its expanded height");
+
+    await standaloneAsk.locator('.card-btn[aria-label="Collapse card"]').click();
+    assert.equal(await standaloneAsk.evaluate((card) => card.classList.contains("collapsed")), true,
       "standalone asks must use the ordinary collapse path");
     await deleteCardBranch(page, standaloneAsk);
     await page.waitForSelector(`.card[data-id="${askDraftState.id}"]`, { state: "detached" });
@@ -2916,7 +2949,7 @@ async function verifyLogicalMarkGrouping() {
     await page.waitForSelector("#ask.visible");
     await page.fill("#ask-text", "Why should this whole range highlight?");
     await page.click('#ask .ask-commit[data-commit="ask"]');
-    const groupedCanvasMark = page.locator('.card.root mark[aria-label="Open branch: Grouped mark branch"].mark-ready');
+    const groupedCanvasMark = page.locator('.card.root mark[aria-label^="Open branch: Grouped mark branch, status "].mark-ready');
     await groupedCanvasMark.first().waitFor();
     const groupedId = await groupedCanvasMark.first().getAttribute("data-child");
 
@@ -2924,7 +2957,7 @@ async function verifyLogicalMarkGrouping() {
     await page.waitForSelector("#ask.visible");
     await page.fill("#ask-text", "How does this overlap the larger range?");
     await page.click('#ask .ask-commit[data-commit="ask"]');
-    const overlappingCanvasMark = page.locator('.card.root mark[aria-label="Open branch: Overlapping mark branch"].mark-ready');
+    const overlappingCanvasMark = page.locator('.card.root mark[aria-label^="Open branch: Overlapping mark branch, status "].mark-ready');
     await overlappingCanvasMark.waitFor();
     const overlappingId = await overlappingCanvasMark.getAttribute("data-child");
 
@@ -2932,7 +2965,7 @@ async function verifyLogicalMarkGrouping() {
     await page.waitForSelector("#ask.visible");
     await page.fill("#ask-text", "Why is this mark separate?");
     await page.click('#ask .ask-commit[data-commit="ask"]');
-    const unrelatedCanvasMark = page.locator('.card.root mark[aria-label="Open branch: Unrelated mark branch"].mark-ready');
+    const unrelatedCanvasMark = page.locator('.card.root mark[aria-label^="Open branch: Unrelated mark branch, status "].mark-ready');
     await unrelatedCanvasMark.waitFor();
     const unrelatedId = await unrelatedCanvasMark.getAttribute("data-child");
     assert.equal(providerCalls, 3, "the mark-group fixture should create its grouped, overlapping, and unrelated branches");
@@ -3583,14 +3616,26 @@ async function verifyCanvasBranching() {
   assert.deepEqual(await pillTexts("followup"), defaultPillTexts,
     "the follow-up replica has the same three slots even while its linked surface is collapsed");
   assert.equal(await page.locator(".asking-editor.open").count(), 0, "no editor is open until a pill is clicked");
-  assert.equal(await page.locator('[data-asking-surface][data-set="selection"] [data-preset-add]').innerText(), "Add question",
-    "an absent optional slot exposes one verb-first Add affordance");
-  assert.deepEqual(await page.locator("[data-reaction-prompt] .asking-reaction-glyph").allInnerTexts(), ["👍", "👎"],
-    "reaction glyphs are the two fixed row labels");
-  assert.equal(await page.locator("[data-reaction-prompt] textarea").count(), 2,
-    "each reaction row exposes one multiline instruction field");
-  assert.equal(await page.locator("[data-reaction-prompt] input").count(), 0,
-    "reaction labels have no editable or emoji-specific field");
+  assert.equal(await page.locator('[data-asking-surface][data-set="selection"] [data-preset-add]').count(), 0,
+    "a full three-question replica has no Add question affordance");
+  assert.deepEqual(await page.locator('[data-asking-surface][data-set="selection"] [data-preset-button] kbd').allTextContents(),
+    ["1", "2", "3"], "the default replica exposes only the three supported position hints");
+  // Reactions are chrome on the selection surface, so the replica wears them in
+  // the same trailing slot — no separate Reactions section anywhere.
+  assert.deepEqual(await page.locator('[data-asking-surface][data-set="selection"] .thumb-pair [data-reaction-button]')
+    .evaluateAll((buttons) => buttons.map((button) => button.firstChild.nodeValue)), ["👍 ", "👎 "],
+  "the selection replica renders the two thumbs after the pills");
+  assert.deepEqual(await page.locator('[data-asking-surface][data-set="selection"] [data-reaction-button] kbd').allTextContents(),
+    ["↑", "↓"], "thumbs wear their arrow hints exactly as the product does");
+  assert.equal(await page.locator('[data-asking-surface][data-set="followup"] .thumb-pair').count(), 0,
+    "the follow-up replica has no thumbs, like the follow-up composer");
+  assert.equal(await page.locator(".asking-reactions, [data-reaction-prompt]").count(), 0,
+    "no standalone Reactions section and no always-open reaction fields");
+  assert.equal(await page.locator('[data-asking-surface][data-set="selection"] .ask-actions').evaluate((row) => {
+    const first = row.querySelector("[data-preset-button]").getBoundingClientRect();
+    const thumbs = row.querySelector(".thumb-pair").getBoundingClientRect();
+    return Math.abs(first.top - thumbs.top) <= 1;
+  }), true, "the default pills and trailing thumbs share one row");
   const fidelity = await page.evaluate(() => {
     const mock = document.querySelector('[data-asking-surface][data-set="selection"] .asking-mock');
     const row = mock.querySelector(".ask-actions");
@@ -3618,8 +3663,19 @@ async function verifyCanvasBranching() {
   assert.equal(fidelity.linkChecked, true, "fresh Quick questions settings start linked");
   assert.equal(fidelity.followupVisible, "hidden", "the linked default collapses the duplicate follow-up surface");
 
-  // The optional slot is created in place, edits through the same two fields,
-  // and removal returns to Add instead of making a restore chip.
+  // Removing a built-in exposes Add in that vacant slot. The custom question
+  // is created in place, edits through the same two fields, and removal returns
+  // to Add instead of making a restore chip.
+  await page.click('[data-asking-surface][data-set="selection"] [data-preset-button="eli5"]');
+  await page.click('[data-asking-surface][data-set="selection"] [data-preset-remove]');
+  assert.equal(await page.locator('[data-asking-surface][data-set="selection"] .preset-actions').evaluate((group) =>
+    group.lastElementChild?.hasAttribute("data-preset-add")), true,
+  "Add question is the last preset-actions child after a built-in leaves a slot");
+  assert.equal(await page.locator('[data-asking-surface][data-set="selection"] .ask-actions').evaluate((row) => {
+    const add = row.querySelector("[data-preset-add]").getBoundingClientRect();
+    const thumbs = row.querySelector(".thumb-pair").getBoundingClientRect();
+    return Math.abs(add.top - thumbs.top) <= 1;
+  }), true, "Add question stays on the same row as the trailing thumbs");
   await page.click('[data-asking-surface][data-set="selection"] [data-preset-add]');
   await page.waitForSelector('[data-asking-surface][data-set="selection"] .asking-editor.open');
   assert.equal(await page.evaluate(() => document.activeElement.id), "asking-selection-custom-label");
@@ -3629,10 +3685,12 @@ async function verifyCanvasBranching() {
     "an optional slot has no imaginary built-in default");
   await page.fill("#asking-selection-custom-label", "Counterpoint");
   await page.fill("#asking-selection-custom-instruction", "Challenge this claim.");
-  assert.deepEqual(await pillTexts("selection"), [...defaultPillTexts, "Counterpoint "],
-    "the custom question becomes the positional fourth pill");
+  assert.deepEqual(await pillTexts("selection"), ["Explain ", "Go deeper ", "Counterpoint "],
+    "the custom question fills the vacant third slot after the remaining built-ins");
   assert.deepEqual(await page.locator('[data-asking-surface][data-set="selection"] [data-preset-button] kbd').allTextContents(),
-    ["1", "2", "3", "4"], "four position hints remain truthful");
+    ["1", "2", "3"], "the custom question receives the third position hint");
+  assert.equal(await page.locator('[data-asking-surface][data-set="selection"] [data-preset-add]').count(), 0,
+    "filling the vacant slot removes Add question");
   assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("rh-ask-presets-v1")).selection.custom), {
     label: "Counterpoint", instruction: "Challenge this claim.", removed: false,
   });
@@ -3644,16 +3702,39 @@ async function verifyCanvasBranching() {
   assert.equal(await page.evaluate(() => Object.hasOwn(
     JSON.parse(localStorage.getItem("rh-ask-presets-v1")).selection, "custom")), false,
   "custom removal persists as an absent slot");
+  await page.click('[data-asking-surface][data-set="selection"] [data-preset-restore="eli5"]');
 
+  // A thumb edits like a pill: click it, the editor opens in place beneath the
+  // row with the instruction focused. There is no label and nothing to remove.
+  await page.click('[data-asking-surface][data-set="selection"] [data-reaction-button="up"]');
+  await page.waitForSelector('[data-asking-surface][data-set="selection"] .asking-editor.open');
+  assert.equal(await page.evaluate(() => document.activeElement.id), "asking-reaction-up-instruction",
+    "opening a thumb editor moves focus straight into its instruction");
+  assert.equal(await page.getAttribute('[data-asking-surface][data-set="selection"] [data-reaction-button="up"]', "aria-expanded"), "true");
+  assert.equal(await page.locator('[data-reaction-prompt="up"] input').count(), 0, "a reaction has no label field");
+  assert.equal(await page.locator('[data-reaction-prompt="up"] [data-preset-remove]').count(), 0, "a reaction cannot be removed");
   const upInstruction = page.locator('[data-reaction-prompt="up"] [data-reaction-instruction]');
+  assert.equal(await upInstruction.inputValue(), "This landed well — use a similar approach.");
+  assert.equal(await page.locator('[data-reaction-prompt="up"] [data-reaction-reset]').isVisible(), false,
+    "Reset appears only once the instruction differs from its default");
   await upInstruction.fill("Keep the concrete opening.");
   assert.equal(await page.locator('[data-reaction-prompt="up"] [data-reaction-reset]').isVisible(), true,
     "a reaction reset appears only after its instruction changes");
   assert.equal(JSON.parse(await page.evaluate(() => localStorage.getItem("rh-reaction-prompts-v1"))).up.instruction,
     "Keep the concrete opening.");
+  assert.equal(await page.getAttribute('[data-asking-surface][data-set="selection"] [data-reaction-button="up"]', "title"),
+    "Keep the concrete opening.", "the thumb's tooltip mirrors the stored instruction live");
   await page.click('[data-reaction-prompt="up"] [data-reaction-reset]');
   assert.equal(await upInstruction.inputValue(), "This landed well — use a similar approach.");
   assert.equal(await page.locator('[data-reaction-prompt="up"] [data-reaction-reset]').isVisible(), false);
+  // Clicking the other thumb swaps editors; clicking the open one closes it.
+  await page.click('[data-asking-surface][data-set="selection"] [data-reaction-button="down"]');
+  assert.equal(await page.evaluate(() => document.activeElement.id), "asking-reaction-down-instruction");
+  assert.equal(await page.getAttribute('[data-asking-surface][data-set="selection"] [data-reaction-button="up"]', "aria-expanded"), "false");
+  await page.click('[data-asking-surface][data-set="selection"] [data-reaction-button="down"]');
+  await page.waitForSelector('[data-asking-surface][data-set="selection"] .asking-editor:not(.open)');
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.reactionButton), "down",
+    "closing a thumb editor hands focus back to the thumb");
 
   // Click-to-edit: the pill expands its editor in place and hands over focus.
   await page.click('[data-asking-surface][data-set="selection"] [data-preset-button="explain"]');
@@ -4172,6 +4253,8 @@ async function verifyCanvasBranching() {
   await page.waitForSelector("#ask:not(.visible)", { state: "attached" });
   await page.waitForFunction(() => document.activeElement?.matches(".card.root"));
   assert.equal(await page.evaluate(() => window.getSelection().toString()), "Euler identity", "selection-bar Escape should preserve the live text selection");
+  assert.equal(await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle), "none",
+    "selection-bar Escape should keep the focused card free of a focus ring");
   assert.equal(await page.evaluate(() => document.body.classList.contains("mode-canvas")), true, "selection-bar Escape must stay inside the selection bar");
   await panCanvasBy(page, { x: -edgeSelection.pan.x, y: -edgeSelection.pan.y });
 
@@ -4190,7 +4273,7 @@ async function verifyCanvasBranching() {
     return { id: tile.dataset.child, tabIndex: tile.tabIndex, name: tile.getAttribute("aria-label") };
   });
   assert.equal(pendingSidebarContract.tabIndex, 0, "pending margin notes should be tabbable links");
-  assert.match(pendingSidebarContract.name, /^Open branch: .+, pending$/, "pending margin notes should name the branch and pending state");
+  assert.match(pendingSidebarContract.name, /^Open branch: .+, status Thinking$/, "pending margin notes should name the branch and workflow state");
   const pendingAlignment = await page.evaluate((id) => {
     const tile = document.querySelector(`#margin-notes .side-item[data-child="${id}"]`);
     const mark = document.querySelector(`#reader-main mark[data-child="${id}"]`);
@@ -4209,7 +4292,7 @@ async function verifyCanvasBranching() {
 
   const sidebarTile = streamedSidebarTile;
   assert.deepEqual(await sidebarTile.evaluate((tile) => ({ role: tile.getAttribute("role"), tabIndex: tile.tabIndex, name: tile.getAttribute("aria-label") })),
-    { role: "link", tabIndex: 0, name: "Open branch: Why does this matter?" }, "settled sidebar tiles should expose named link semantics without activity state");
+    { role: "link", tabIndex: 0, name: "Open branch: Why does this matter?, status Needs review" }, "settled sidebar tiles should expose named link semantics with workflow state");
   await sidebarTile.focus();
   await page.keyboard.press("Enter");
   await page.waitForFunction(() => document.querySelector('.crumb[aria-current="page"]')?.textContent === "Euler branch");
@@ -4271,7 +4354,7 @@ async function verifyCanvasBranching() {
 
   const branchMark = page.locator('.card mark[data-child].mark-ready').first();
   assert.deepEqual(await branchMark.evaluate((mark) => ({ tabIndex: mark.tabIndex, role: mark.getAttribute("role"), name: mark.getAttribute("aria-label") })),
-    { tabIndex: 0, role: "link", name: "Open branch: Euler branch" }, "branch marks should expose keyboard navigation semantics and the branch title");
+    { tabIndex: 0, role: "link", name: "Open branch: Euler branch, status Reviewed" }, "branch marks should expose keyboard navigation semantics, branch title, and workflow state");
   await branchMark.hover();
   await page.waitForTimeout(350);
   assert.equal(await page.locator("#peek").count(), 0, "hovering a mark must not raise any peek surface — marks are plain links");

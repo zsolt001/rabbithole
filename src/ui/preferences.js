@@ -17,6 +17,7 @@ const THEME_KEY = "rh-theme";
 const READING_SCALE_KEY = "rh-reading-scale";
 const AUTO_TIDY_KEY = "rh-auto-tidy";
 const AUTO_TIDY_GRACE_KEY = "rh-auto-tidy-grace";
+export const AI_IMAGES_PREF_KEY = "rh-ai-images";
 export const ASK_PRESETS_KEY = "rh-ask-presets-v1";
 export const REACTION_PROMPTS_KEY = "rh-reaction-prompts-v1";
 
@@ -31,6 +32,7 @@ let systemThemeMql = null;
 let readingScaleCache = null;
 let autoTidyEnabledCache = null;
 let autoTidyGraceCache = null;
+let aiImagesEnabledCache = null;
 let swapFrame = 0;
 let askPresetsCache = null;
 let reactionPromptsCache = null;
@@ -92,6 +94,7 @@ function resetDerivedCaches() {
   readingScaleCache = null;
   autoTidyEnabledCache = null;
   autoTidyGraceCache = null;
+  aiImagesEnabledCache = null;
   askPresetsCache = null;
   reactionPromptsCache = null;
 }
@@ -118,6 +121,7 @@ function preferenceKind(key) {
   if (key === ASK_PRESETS_KEY) return "ask-presets";
   if (key === REACTION_PROMPTS_KEY) return "reaction-prompts";
   if (key === AUTO_TIDY_KEY || key === AUTO_TIDY_GRACE_KEY) return "auto-tidy";
+  if (key === AI_IMAGES_PREF_KEY) return "ai-images";
   return null;
 }
 
@@ -308,6 +312,22 @@ export function setAutoTidyGraceSeconds(value) {
   return next;
 }
 
+// ------------------------------------------------------------- AI images
+
+export function aiImagesEnabled() {
+  if (aiImagesEnabledCache === null) aiImagesEnabledCache = readStored(AI_IMAGES_PREF_KEY) === "on";
+  return aiImagesEnabledCache;
+}
+
+export function setAiImagesEnabled(value) {
+  const next = value === true;
+  aiImagesEnabledCache = next;
+  if (next) writeStored(AI_IMAGES_PREF_KEY, "on");
+  else removeStored(AI_IMAGES_PREF_KEY);
+  notify("ai-images");
+  return next;
+}
+
 // ------------------------------------------------------------ ask presets
 
 /*
@@ -424,10 +444,14 @@ export function askPresetsLinked() {
 
 /** The keys a surface actually shows, in row order — removal follows the link. */
 export function visibleAskPresetKeys(set) {
-  return ASK_PRESET_KEYS.filter((key) => {
+  const builtIns = DEFAULT_ASK_PRESET_KEYS.filter((key) => {
     const preset = askPreset(set, key);
     return !!preset && preset.removed !== true;
   });
+  const custom = askPreset(set, "custom");
+  // A legacy store may contain three visible built-ins plus a custom preset.
+  // Keep that custom value stored but hidden until a built-in leaves a slot.
+  return [...builtIns, ...(custom && custom.removed !== true ? ["custom"] : [])].slice(0, 3);
 }
 
 export function setAskPresetsLinked(value) {
@@ -490,6 +514,7 @@ export function setAskPresetRemoved(set, key, value) {
 }
 
 export function createCustomAskPreset(set) {
+  if (visibleAskPresetKeys(set).length >= 3) return null;
   return setAskPreset(set, "custom", {
     label: "New question",
     instruction: "Ask a focused question about this.",

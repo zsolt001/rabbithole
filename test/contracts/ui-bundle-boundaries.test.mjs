@@ -57,7 +57,6 @@ for (const liveMaintenanceModule of ["src/ui/canvas/attention.js", "src/ui/canva
 
 const frozenBundle = result.outputFiles[0].text;
 for (const liveOnlyText of [
-  "attention",
   "auto-tidy: false fold",
   "rh-auto-tidy",
   "Folds branches you've moved on from",

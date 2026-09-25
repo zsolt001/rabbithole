@@ -101,7 +101,7 @@ export const CANVAS_SHELL = `
 <div id="palette" hidden><div id="palette-panel">
   <div class="pal-input">
     ${iconSvg("search")}
-    <input id="pal-text" placeholder="Search this Rabbithole…" aria-label="Search this Rabbithole" aria-controls="pal-results" aria-autocomplete="list" autocomplete="off" spellcheck="false">
+    <input id="pal-text" placeholder="Search or filter status:done…" aria-label="Search this Rabbithole or filter by status" aria-controls="pal-results" aria-autocomplete="list" autocomplete="off" spellcheck="false">
     <kbd>esc</kbd>
   </div>
   <div id="pal-results" role="listbox" aria-label="Search results"></div>
@@ -128,6 +128,7 @@ export const CANVAS_SHELL = `
   ${buttonMarkup({ bare: true, className: "sm-item", id: "cm-copy", role: "menuitem", tabIndex: -1, label: "Copy as Markdown", labelClass: "sm-label", svgIconHtml: '<span class="sm-ic">' + iconSvg("copy") + '</span>' })}
   ${buttonMarkup({ bare: true, className: "sm-item", id: "cm-rename", role: "menuitem", tabIndex: -1, label: "Rename", labelClass: "sm-label", svgIconHtml: '<span class="sm-ic">' + iconSvg("rename") + '</span>' })}
   ${buttonMarkup({ bare: true, className: "sm-item", id: "cm-convert", role: "menuitem", tabIndex: -1, label: "Convert to Ask", labelClass: "sm-label", svgIconHtml: '<span class="sm-ic">' + iconSvg("question") + '</span>' })}
+  ${buttonMarkup({ bare: true, className: "sm-item", id: "cm-done", role: "menuitem", tabIndex: -1, label: "Mark Done", labelClass: "sm-label", svgIconHtml: '<span class="sm-ic">' + iconSvg("check") + '</span>' })}
   <div class="sm-sep cm-pin-sep"></div>
   ${buttonMarkup({ bare: true, className: "sm-item", id: "cm-pin", role: "menuitem", tabIndex: -1, label: "Pin window", labelClass: "sm-label", svgIconHtml: '<span class="sm-ic">' + iconSvg("pin") + '</span>' })}
   <div class="sm-sep"></div>

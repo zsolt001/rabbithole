@@ -1,6 +1,7 @@
 import { BRANCH_FOLLOWUP, branchTypeOfNode, isDockedNote } from "../core/hole/ask.js";
 import { truncate } from "../core/hole/lens.js";
 import { lineageNodesFromMap } from "../core/hole/tree.js";
+import { deriveSubtreeWorkflow, deriveWorkflowStatus } from "../core/hole/workflow.js";
 import { iconSvg } from "../core/html/icons.js";
 import { escapeHtml } from "../core/utils.js";
 import { presetLabelForOrigin } from "./ask-presets.js";
@@ -17,7 +18,6 @@ import {
   playLandingCue,
   READER_BASE,
   readerMain,
-  sessionPhase,
   setCurrentNodeId,
   setModeValue,
   world,
@@ -29,6 +29,7 @@ import { buildOriginCrop } from "./origin-provenance.js";
 import { captureContentPosition, restoreContentPosition } from "./scroll-position.js";
 import { applyChildHighlights, transitionMarkGroups } from "./text-marks.js";
 import { mountVisuals } from "./visuals.js";
+import { canSetWorkflowDone, workflowBadge, workflowDoneButton, workflowSummary } from "./workflow-status.js";
 
 function anchorStart(node) {
   return Number.isFinite(node.origin?.anchor?.offset_start) ? node.origin.anchor.offset_start : 1e9;
@@ -310,6 +311,21 @@ export function renderReaderBody() {
   }
   const crop = buildOriginCrop(node, "reader");
   if (crop) col.appendChild(crop);
+  if (node.parent_id) {
+    const workflow = document.createElement("div");
+    workflow.className = "reader-workflow";
+    workflow.appendChild(workflowBadge(node));
+    const aggregate = deriveSubtreeWorkflow(node, nodes, childrenOf);
+    if (aggregate.total > 1) {
+      const subtree = document.createElement("span");
+      subtree.className = "workflow-subtree";
+      subtree.textContent = aggregate.total - 1 + " below · " + aggregate.dominant.label;
+      subtree.title = workflowSummary(node, aggregate);
+      workflow.appendChild(subtree);
+    }
+    if (canSetWorkflowDone(node)) workflow.appendChild(workflowDoneButton(node, "workflow-done-action"));
+    col.appendChild(workflow);
+  }
   const dc = buildDocContent(node, READER_BASE);
   col.appendChild(dc);
   applyChildHighlights(dc, node);
@@ -415,7 +431,7 @@ export function renderMarginNotes() {
         ? lensBadgeHtml(k.origin) + (k.origin.question ? " " + escapeHtml(k.origin.question) : "")
         : escapeHtml(k.origin && k.origin.question ? k.origin.question : k.title || "Untitled");
     const quote = k.origin && k.origin.selected_text ? k.origin.selected_text : "";
-    const status = pending ? pendingStatusHtml(k) : "open →";
+    const workflowStatus = deriveWorkflowStatus(k);
     let tile = noteNodes[k.id];
     if (!tile) {
       tile = document.createElement("div");
@@ -438,9 +454,17 @@ export function renderMarginNotes() {
     appendOriginAttachmentThumbnails(tile._question, k);
     tile._quote.textContent = quote ? "“" + truncate(quote, 80) + "”" : "";
     tile._quote.hidden = !quote;
-    tile._status.innerHTML = status;
+    tile._status.replaceChildren(workflowBadge(k));
+    const aggregate = deriveSubtreeWorkflow(k, nodes, childrenOf);
+    if (aggregate.total > 1) {
+      const subtree = document.createElement("span");
+      subtree.className = "workflow-subtree";
+      subtree.textContent = aggregate.total - 1 + " below";
+      subtree.title = workflowSummary(k, aggregate);
+      tile._status.appendChild(subtree);
+    }
     const name = (k.origin && k.origin.question) || k.title || "Untitled";
-    tile.setAttribute("aria-label", "Open branch: " + name + (pending ? ", pending" : ""));
+    tile.setAttribute("aria-label", "Open branch: " + name + ", status " + workflowStatus.label);
     // A streaming answer is watchable right here: its last lines render live
     // inside the note (and the whole note opens the full streaming view).
     if (pending && k.html) {
@@ -503,22 +527,6 @@ function mountNoteVisuals(panes) {
     if (typeof readerLifecycle.hooks.mountDocImages === "function")
       readerLifecycle.hooks.mountDocImages(panes[i].pane, key);
   }
-}
-function pendingStatusHtml(k) {
-  const copy = {
-    frozen: '<span class="si-muted">unanswered in this snapshot</span>',
-    closed: '<span class="si-muted">saved — answered when you reopen</span>',
-    away: '<span class="si-muted">saved — waiting for the agent</span>',
-    live:
-      k && k.queued
-        ? '<span class="shimmer-text">Waiting for previous answer</span>'
-        : k && k.delegated
-          ? '<span class="shimmer-text">Working in sub-agent…</span>'
-          : k && k.html
-            ? '<span class="shimmer-text">Writing…</span>'
-            : '<span class="shimmer-text">Thinking…</span>',
-  };
-  return copy[sessionPhase()];
 }
 // j/k focus ring over the current document's anchored branches.
 let kbdMarkIdx = -1;

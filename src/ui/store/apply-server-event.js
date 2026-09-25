@@ -37,6 +37,7 @@ export function applyServerEvent(store, message, options = {}) {
   if (type === "node_answered") {
     node.delegated = false;
     node.queued = false;
+    node.drawing = false;
     node.error = null;
     node.status = "answered";
     node.title = message.title || node.title;
@@ -51,6 +52,7 @@ export function applyServerEvent(store, message, options = {}) {
     result.firstChunk = !node.markdown;
     node.delegated = false;
     node.queued = false;
+    node.drawing = false;
     node.error = null;
     node.markdown = message.markdown || "";
     node.base_url = message.base_url || node.base_url || null;
@@ -59,6 +61,7 @@ export function applyServerEvent(store, message, options = {}) {
   } else if (type === "node_work_state" && node.status === "pending") {
     node.delegated = message.state === "delegated";
     node.queued = message.state === "queued";
+    node.drawing = message.state === "drawing";
     invalidated.add("status");
   } else if (type === "node_extensions_patch") {
     const value =
@@ -78,6 +81,7 @@ export function applyServerEvent(store, message, options = {}) {
     else node.extensions = { ...(node.extensions || {}), [message.namespace]: message.value };
     result.namespace = message.namespace;
     invalidated.add(message.namespace === "canvas" ? "presentation" : "document");
+    if (message.namespace === "attention" || message.namespace === "review") invalidated.add("status");
   } else if (type === "pdf_convert_progress") {
     node.markdown = message.markdown || "";
     node._pdfProgress = { done: message.page_done, total: message.page_total };

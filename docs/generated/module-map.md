@@ -114,6 +114,8 @@ This inventory is derived from the source tree.
 - `src/node/mcp/http/export.js`
 - `src/node/mcp/http/page.js`
 - `src/node/mcp/http/routes.js`
+- `src/node/mcp/image-gen.js`
+- `src/node/mcp/images-setting.js`
 - `src/node/mcp/instructions.js`
 - `src/node/mcp/main.js`
 - `src/node/mcp/note-hashes.js`
@@ -124,11 +126,13 @@ This inventory is derived from the source tree.
 - `src/node/mcp/server.js`
 - `src/node/mcp/store/fs-store.js`
 - `src/node/mcp/store/prefs-store.js`
+- `src/node/mcp/tool-result.js`
 - `src/node/mcp/tools.js`
 - `src/node/pdf-crop.js`
 - `src/node/pdf-ingest.js`
 - `src/node/rabbithole.js`
 - `src/node/sessions.js`
+- `src/node/shared/codex-home.js`
 - `src/node/shared/deadline.js`
 - `src/node/shared/dist-assets.js`
 - `src/node/shared/errno.js`
@@ -192,6 +196,7 @@ This inventory is derived from the source tree.
 - `src/ui/focus-trap.js`
 - `src/ui/frozen-entry.js`
 - `src/ui/hosts/frozen/index.js`
+- `src/ui/hosts/live/ai-images-settings.js`
 - `src/ui/hosts/live/index.js`
 - `src/ui/hydrate.js`
 - `src/ui/image-ux.js`

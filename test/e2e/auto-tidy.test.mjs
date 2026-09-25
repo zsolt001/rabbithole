@@ -85,6 +85,8 @@ try {
   await alpha.locator(".nc-inner textarea").press("Control+Enter");
   const alphaDescendant = page.locator('.card:not(.root)', { hasText: "Alpha descendant answer." });
   await alphaDescendant.waitFor();
+  await markDone(alphaDescendant);
+  await markDone(alpha);
   await alphaDescendant.locator(".card-title").click();
   await askFromSelection(page, "Gamma anchor", "Why gamma?");
   const gamma = page.locator('.card:not(.root)', { hasText: "Gamma branch answer." });
@@ -94,6 +96,7 @@ try {
   const delta = page.locator('.card:not(.root)', { hasText: "Paragraph 90 keeps this card scrollable." });
   await delta.waitFor();
   const deltaId = await delta.getAttribute("data-id");
+  await markDone(delta);
   const deltaBody = delta.locator(".card-body");
   assert.equal(
     await deltaBody.evaluate((body) => body.scrollHeight > body.clientHeight),
@@ -199,6 +202,11 @@ try {
   );
   const frozenPage = await context.newPage();
   await frozenPage.setContent(frozenHtml, { waitUntil: "load" });
+  assert.equal(await frozenPage.locator('.card[data-id="' + alphaId + '"] .workflow-status-done').isVisible(), true,
+    "frozen cards retain their derived workflow status");
+  await frozenPage.locator('.card[data-id="' + alphaId + '"] .card-more').click();
+  assert.equal(await frozenPage.locator("#cm-done").isVisible(), false, "frozen card menus omit workflow mutations");
+  await frozenPage.keyboard.press("Escape");
   await frozenPage.locator("#t-settings").click();
   assert.deepEqual(
     await frozenPage.locator("[data-settings-section]").allInnerTexts(),
@@ -258,6 +266,16 @@ async function setComposerDraft(card, value) {
   }, value);
 }
 
+async function markDone(card) {
+  const page = card.page();
+  await card.locator(".card-more").click();
+  const action = page.locator("#cm-done");
+  await action.waitFor({ state: "visible" });
+  if ((await action.locator(".sm-label").innerText()) === "Mark Done") await action.click();
+  else await page.keyboard.press("Escape");
+  await card.locator(".workflow-status-done").waitFor();
+}
+
 async function verifyEnableMidSession(app) {
   const context = await app.browser.newContext();
   try {
@@ -282,6 +300,7 @@ async function verifyEnableMidSession(app) {
     const firstId = await first.getAttribute("data-id");
     await waitForStoredStatus(page, firstId, "answered");
     await first.locator(".card-title").click();
+    await markDone(first);
 
     await askFromSelection(page, "Second anchor", "Why second?");
     const second = page.locator('.card:not(.root)', { hasText: "Second answer becomes the warm spine." });
@@ -398,6 +417,7 @@ async function verifyFreshAnswerInvalidation(app) {
     await page.locator('.card[data-id="a"] .card-title').click();
     await attentionWritten;
     assert.equal(!!session.nodes.get("a").extensions.attention?.seen_at, true, "re-engagement writes a fresh seen ledger entry");
+    await markDone(page.locator('.card[data-id="a"]'));
     await page.locator('.card[data-id="b"] .card-title').click();
     await advanceAutoTidyClock(page, 10_000);
     await page.waitForSelector('.card[data-id="a"].collapsed');

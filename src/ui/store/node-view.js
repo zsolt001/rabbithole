@@ -2,6 +2,7 @@ const HANDLE_FIELDS = Object.freeze([
   "el",
   "bodyEl",
   "titleEl",
+  "workflowEl",
   "actsEl",
   "actDivider",
   "moreBtn",

@@ -26,6 +26,7 @@ import {
   setTransportAdapter,
 } from "../../transport-status.js";
 import { setVisualStyles } from "../../visual-style-runtime.js";
+import { registerAiImagesSettings } from "./ai-images-settings.js";
 
 function createCanvasMaintenance(clock) {
   const attention = createCanvasAttention();
@@ -37,6 +38,7 @@ function createCanvasMaintenance(clock) {
     throw error;
   }
   return {
+    engageCard: attention.engageCard,
     branchExpanded: autoTidy.branchExpanded,
     cardScrolled: attention.cardScrolled,
     modeChanged: function (nextMode) {
@@ -59,6 +61,7 @@ export function startRabbithole(hydration, options) {
     ? createHostPreferenceBacking({ seed: options.preferences, post: post })
     : null;
   if (preferenceBacking) configurePreferenceBacking(preferenceBacking);
+  if (preferenceBacking) registerAiImagesSettings();
 
   function flushLiveState() {
     return Promise.all([flushPendingSaves(), preferenceBacking ? preferenceBacking.flush() : Promise.resolve()]);

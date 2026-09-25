@@ -1,4 +1,6 @@
-import { childrenOf, currentNodeId, edgesSvg, isVisible, mode, nodes, readerMain, SVGNS, view } from "../core.js";
+import { roundedOrthogonalPath, routeConnector } from "../../core/edge-routing.js";
+import { nodeOrder } from "../../core/layout.js";
+import { childrenOf, edgesSvg, isVisible, mode, nodes, SVGNS, view } from "../core.js";
 import { transitionMarkGroups } from "../text-marks.js";
 import { r } from "./runtime.js";
 import { canvasBody, canvasCard, isFollowup } from "./shared.js";
@@ -114,19 +116,13 @@ export function edgeStart(p, child, side, measureCache) {
   return { x: ax != null ? ax : p.position.x + p.size.w / 2, y: p.position.y, anchored: anchored };
 }
 
-export function edgeEnd(n, side, measureCache) {
+export function edgeEnd(n, side, measureCache, alignedY = null) {
   const nh = edgeMeasure(n, measureCache).h;
-  if (side === "left") return { x: n.position.x, y: n.position.y + nh / 2 };
-  if (side === "right") return { x: n.position.x + n.size.w, y: n.position.y + nh / 2 };
+  const sideY = alignedY == null ? n.position.y + nh / 2 : clamp(n.position.y + 14, n.position.y + nh - 14, alignedY);
+  if (side === "left") return { x: n.position.x, y: sideY };
+  if (side === "right") return { x: n.position.x + n.size.w, y: sideY };
   if (side === "top") return { x: n.position.x + n.size.w / 2, y: n.position.y };
   return { x: n.position.x + n.size.w / 2, y: n.position.y + nh };
-}
-
-export function ctrlPt(pt, side, d) {
-  if (side === "right") return pt.x + d + " " + pt.y;
-  if (side === "left") return pt.x - d + " " + pt.y;
-  if (side === "bottom") return pt.x + " " + (pt.y + d);
-  return pt.x + " " + (pt.y - d);
 }
 
 export function ensureEdgeEls(childId) {
@@ -173,14 +169,15 @@ export function drawEdges() {
   function vis(node) {
     return isVisible(node, visCache);
   }
-  for (const id in nodes) {
-    const n = nodes[id];
+  const routed = [];
+  const ordered = Object.values(nodes).sort(nodeOrder);
+  for (const n of ordered) {
     if (!n.parent_id || !n.el) continue;
     const p = nodes[n.parent_id];
     if (!p || !p.el) continue;
     if (!vis(n) || !vis(p)) continue;
     live[n.id] = true;
-    renderEdge(p, n, measureCache);
+    renderEdge(p, n, measureCache, routed);
   }
   for (const childId in r.edgeEls) {
     if (!live[childId]) removeEdge(childId);
@@ -190,46 +187,41 @@ export function drawEdges() {
 }
 
 export function drawEdgeSubset(ids, positionNodeIds) {
-  const visCache = Object.create(null);
-  const measureCache = Object.create(null);
-  function vis(node) {
-    return isVisible(node, visCache);
-  }
-  for (const childId in ids) {
-    const child = nodes[childId];
-    const parent = child && child.parent_id ? nodes[child.parent_id] : null;
-    if (!child || !child.el || !parent || !parent.el || !vis(child) || !vis(parent)) {
-      removeEdge(childId);
-      continue;
-    }
-    renderEdge(parent, child, measureCache);
-  }
-  for (const nodeId in positionNodeIds) {
-    const node = nodes[nodeId];
-    if (node && node.bodyEl) r.lifecycle.hooks.positionDockedNotes(node.bodyEl);
-    if (node && mode === "reader" && currentNodeId === node.id) r.lifecycle.hooks.positionDockedNotes(readerMain);
-  }
+  // Every visible card is an obstacle, so moving one card can change routes
+  // elsewhere even when it is not an endpoint of those connectors.
+  drawEdges();
 }
 
-export function renderEdge(parent, child, measureCache) {
+export function renderEdge(parent, child, measureCache, routed = []) {
   const sides = edgeSides(parent, child, measureCache);
   const start = edgeStart(parent, child, sides[0], measureCache);
-  const end = edgeEnd(child, sides[1], measureCache);
-  const horiz = sides[0] === "left" || sides[0] === "right";
-  const reach = Math.max(40, (horiz ? Math.abs(end.x - start.x) : Math.abs(end.y - start.y)) / 2);
-  const d =
-    "M " +
-    start.x +
-    " " +
-    start.y +
-    " C " +
-    ctrlPt(start, sides[0], reach) +
-    " " +
-    ctrlPt(end, sides[1], reach) +
-    " " +
-    end.x +
-    " " +
-    end.y;
+  const end = edgeEnd(child, sides[1], measureCache, sides[0] === "left" || sides[0] === "right" ? start.y : null);
+  const obstacles = Object.values(nodes)
+    .filter(function (node) {
+      return node.id !== parent.id && node.id !== child.id && node.el && isVisible(node);
+    })
+    .sort(nodeOrder)
+    .map(function (node) {
+      const h = edgeMeasure(node, measureCache).h;
+      return {
+        minX: node.position.x,
+        minY: node.position.y,
+        maxX: node.position.x + node.size.w,
+        maxY: node.position.y + h,
+      };
+    });
+  const horizontal = sides[0] === "left" || sides[0] === "right";
+  const points = routeConnector(start, end, {
+    obstacles: obstacles,
+    routes: routed,
+    // Both axis-aligned anchor pairs leave in their own direction, jog across
+    // the other axis, then arrive in the target's direction. That produces a
+    // consistent three-segment relationship instead of a hooked connection.
+    preferTwoElbows: true,
+    preferVerticalDeparture: !horizontal,
+  });
+  routed.push(points);
+  const d = roundedOrthogonalPath(points);
   const geom = { d: d, cx: String(start.x), cy: String(start.y), anchored: !!start.anchored };
   const els = ensureEdgeEls(child.id);
   const path = els[0],
