@@ -523,6 +523,11 @@ function handleServer(msg) {
       const p = nodes[node.parent_id];
       if (p && p.bodyEl) upgradeMarks(p.bodyEl, node.id);
       refreshWorkflowUi();
+    } else if (result.type === "node_document_update") {
+      refreshNodeHtml(node);
+      if (node.bodyEl) fillBody(node);
+      if (mode === "reader" && currentNodeId === node.id) renderReaderBody();
+      scheduleEdges();
     } else if (result.type === "node_progress") {
       if (result.invalidated.has("stream")) scheduleStreamRender(node, result.firstChunk);
     } else if (result.type === "node_work_state") {

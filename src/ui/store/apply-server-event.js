@@ -8,6 +8,7 @@ const DOCUMENT_EVENTS = new Set([
   "node_extensions_patch",
   "pdf_convert_progress",
   "node_error",
+  "node_document_update",
 ]);
 
 export function applyServerEvent(store, message, options = {}) {
@@ -48,6 +49,12 @@ export function applyServerEvent(store, message, options = {}) {
     node.extensions = stripNodeAttention(node.extensions);
     invalidated.add("document");
     invalidated.add("status");
+  } else if (type === "node_document_update") {
+    node.markdown = message.markdown || "";
+    if (message.extensions && typeof message.extensions === "object" && !Array.isArray(message.extensions)) {
+      node.extensions = message.extensions;
+    }
+    invalidated.add("document");
   } else if (type === "node_progress" && node.status === "pending") {
     result.firstChunk = !node.markdown;
     node.delegated = false;
