@@ -55,3 +55,12 @@ await updateDocument({ holeId, content: "# Root\n\nFallback edit." });
 hole = await defaultFsStore.loadHole(holeId);
 assert.equal(hole.nodes.find((n) => n.id === "root").markdown, "# Root\n\nFallback edit.");
 console.log("ok fallback to root_id");
+
+// Tool shape assertion
+const { toolDefinitions } = await import("../../src/node/mcp/tools.js");
+const tool = toolDefinitions.find((t) => t.name === "update_document");
+assert.ok(tool, "update_document tool is registered");
+assert.ok(tool.input.content && tool.input.hole_id && tool.input.node_id, "declares content, hole_id, node_id");
+assert.throws(() => tool.validateInput({ hole_id: "h", content: "   " }), /content is required/);
+assert.throws(() => tool.validateInput({ content: "x" }), /session_id or hole_id/);
+console.log("ok update_document tool shape");
