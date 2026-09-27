@@ -6,12 +6,19 @@ const INS_CLOSE = "\u0002";
 const DEL_OPEN = "\u0003";
 const DEL_CLOSE = "\u0004";
 
+const SENTINELS = new RegExp("[" + INS_OPEN + INS_CLOSE + DEL_OPEN + DEL_CLOSE + "]", "g");
+
 /**
  * Render word-level redlines of `current` against `baseline` to HTML.
  * @param {string} baseline @param {string} current @param {(markdown: string) => string} renderMarkdown
  * @returns {string}
  */
 export function renderRedlineHtml(baseline, current, renderMarkdown) {
+  // Strip the internal sentinel chars from raw input so document content that
+  // literally contains them can never be mistaken for ins/del markers after
+  // substituteSentinels.
+  baseline = String(baseline ?? "").replace(SENTINELS, "");
+  current = String(current ?? "").replace(SENTINELS, "");
   const ops = diffBlocks(splitBlocks(baseline), splitBlocks(current));
   let html = "";
   for (const op of ops) {

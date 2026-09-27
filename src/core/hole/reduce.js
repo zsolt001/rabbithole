@@ -400,6 +400,8 @@ function reduceNodeDocumentUpdate(state, event, options) {
   }
   const content = normalizeBlockIds(String(event.content ?? ""), { idFactory: options.idFactory }).markdown;
   const title = typeof event.title === "string" && event.title.trim() ? event.title.trim() : null;
+  // Same node identity signals a no-op to SessionBroadcast.updateNode, which
+  // skips the SSE broadcast; do not replace this with a fresh-but-equal node.
   if (content === node.markdown && !title) return withState(state, { updatedNode: node });
   const next = { ...node, read: Boolean(node.read) };
   if (!node.extensions?.doc_edit) {

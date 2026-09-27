@@ -18,7 +18,7 @@ export function buildOutline(markdown) {
 }
 
 /** @param {string} text */
-function normalizeHeading(text) {
+export function normalizeHeading(text) {
   return String(text).trim().toLowerCase().replace(/\s+/g, " ");
 }
 

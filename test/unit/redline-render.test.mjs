@@ -37,3 +37,11 @@ console.log("ok hostile content stays escaped");
 // No sentinel control characters leak into the output.
 assert.doesNotMatch(html + blockHtml + emph + hostile, /[\u0001-\u0004]/);
 console.log("ok no sentinel leak");
+
+// Raw sentinel control chars in the input are stripped, never turned into marks.
+const S = String.fromCharCode(1, 2, 3, 4);
+const clean = renderRedlineHtml("Clean text.", "Clean text.", render);
+const injected = renderRedlineHtml("Clean text.", "Clean text." + S, render);
+assert.equal(injected, clean);
+assert.doesNotMatch(injected, /rh-ins|rh-del/);
+console.log("ok raw sentinel chars stripped, not marked");

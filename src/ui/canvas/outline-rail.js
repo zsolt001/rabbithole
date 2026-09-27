@@ -1,11 +1,4 @@
-import { changedSectionHeadings } from "../../core/redline/outline.js";
-
-function normalizeHeading(text) {
-  return String(text || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
-}
+import { changedSectionHeadings, normalizeHeading } from "../../core/redline/outline.js";
 
 /** @param {HTMLElement} dc @param {any} node @returns {HTMLElement | null} */
 export function buildOutlineRail(dc, node) {
