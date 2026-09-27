@@ -1,4 +1,3 @@
-// test/unit/redline-outline.test.mjs
 /** @protects outline parsing and change detection for reviewed documents. */
 import assert from "node:assert/strict";
 import { buildOutline, changedSectionHeadings } from "../../src/core/redline/outline.js";
