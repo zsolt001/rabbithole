@@ -93,6 +93,17 @@ export function buildNodeAnsweredEvent(node, overrides = {}) {
   };
 }
 
+/** @param {HoleNode} node */
+export function buildNodeDocumentUpdateEvent(node) {
+  const projected = projectNode(node, "wire");
+  return {
+    type: "node_document_update",
+    node_id: projected.id,
+    markdown: projected.markdown,
+    extensions: projected.extensions,
+  };
+}
+
 /**
  * Apply a browser event to canonical state and request its debounced persist.
  * @param {any} payload

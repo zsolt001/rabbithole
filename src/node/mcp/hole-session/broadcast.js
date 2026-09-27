@@ -1,6 +1,6 @@
 import { systemClock } from "../../../core/clock.js";
 import { lineageTitlesFromMap } from "../../../core/hole/tree.js";
-import { buildNodeAnsweredEvent } from "../../../core/hole-host.js";
+import { buildNodeAnsweredEvent, buildNodeDocumentUpdateEvent } from "../../../core/hole-host.js";
 import { writeSseEvent } from "../../shared/sse.js";
 import { unavailableContextUsage } from "../../context-gauge/usage.js";
 import { SessionListener } from "./listener.js";
@@ -190,6 +190,16 @@ export class SessionBroadcast extends SessionListener {
     this.scheduleSave();
     await this.flushSave();
     this.broadcast(buildNodeAnsweredEvent(node));
+    return node;
+  }
+
+  /** Replace a document node's markdown in place and re-render every connected canvas. */
+  async updateNode(event) {
+    const effects = this.dispatchHoleEvent(event, { now: new Date().toISOString() });
+    const node = effects.updatedNode;
+    this.scheduleSave();
+    await this.flushSave();
+    this.broadcast(buildNodeDocumentUpdateEvent(node));
     return node;
   }
 

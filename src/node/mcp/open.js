@@ -12,6 +12,7 @@ import { BRANCH_FOLLOWUP, collectAllNotes, isDockedNote, isNoteNode, noteEntry }
 import { buildMap, buildNodeContext, buildThread } from "../../core/hole/context.js";
 import { makeNode } from "../../core/hole/node.js";
 import { createHoleState, holeStateToHole, reduceHoleEvent } from "../../core/hole/reduce.js";
+import { lineageNodesFromMap } from "../../core/hole/tree.js";
 import { ingestPdfDocument, isPdfFile } from "./pdf/ingest.js";
 import { normalizeId } from "../../core/utils.js";
 import { shortId } from "../shared/ids.js";
@@ -353,6 +354,53 @@ export async function sendToRabbithole({ holeId, operationId, title, content, pa
   const reduced = reduceHoleEvent(state, event, { now: new Date().toISOString(), mutate: true });
   await defaultFsStore.saveHole(holeStateToHole(reduced.state));
   return { status: "stored", hole_id: holeId, node_id: nodeId, duplicate: false };
+}
+
+/**
+ * Push an edited document back into its node. Resolves the edit target to the
+ * parentless lineage root of `nodeId` (falling back to root_id), then dispatches
+ * a node_document_update on the live session or the stored hole.
+ */
+/** @param {{sessionId?: string, holeId?: string, nodeId?: string, content: string, title?: string}} input */
+export async function updateDocument({ sessionId, holeId, nodeId, content, title }) {
+  sessionId = normalizeId(sessionId);
+  holeId = normalizeId(holeId);
+  nodeId = nodeId == null ? undefined : normalizeId(nodeId);
+  if (!String(content ?? "").trim()) throw new Error("content is required");
+
+  const session = sessionId ? getSession(sessionId) : getSessionByHole(holeId);
+  if (session && !session.isClosed()) {
+    const targetId = resolveDocumentTarget(session.nodes, nodeId, session.rootId);
+    if (!session.nodes.has(targetId)) throw new Error(`Node ${targetId} not found.`);
+    const node = await session.updateNode({ type: "node_document_update", node_id: targetId, content, title });
+    return { status: session.sseClients.size > 0 ? "delivered" : "stored", hole_id: session.holeId, node_id: node.id };
+  }
+
+  if (!holeId) throw new Error("hole_id is required when no live session is open");
+  const hole = await defaultFsStore.loadHole(holeId);
+  if (!hole) throw new Error(`Hole ${holeId} not found.`);
+  const state = createHoleState(/** @type {any} */ (hole), { cloneExtensions: false });
+  const targetId = resolveDocumentTarget(state.nodes, nodeId, hole.root_id);
+  if (!state.nodes.has(targetId)) throw new Error(`Node ${targetId} not found.`);
+  const reduced = reduceHoleEvent(state, { type: "node_document_update", node_id: targetId, content, title }, { now: new Date().toISOString(), mutate: true });
+  await defaultFsStore.saveHole(holeStateToHole(reduced.state));
+  return { status: "stored", hole_id: holeId, node_id: targetId };
+}
+
+/**
+ * Resolve an edit target to the parentless ancestor at the top of its lineage
+ * (the "document" a branch belongs to) — except a note, which never delegates
+ * its identity to the document it's pinned to. Silently retargeting a note
+ * edit onto the parent document would edit the wrong node; instead the note id
+ * passes through untouched so the reducer's own not-a-document-node guard
+ * rejects it against the node the caller actually named.
+ * @param {Map<string, any>} nodes @param {string | undefined} nodeId @param {string} rootId
+ */
+function resolveDocumentTarget(nodes, nodeId, rootId) {
+  if (!nodeId) return String(rootId);
+  if (isNoteNode(nodes.get(nodeId))) return nodeId;
+  const lineage = lineageNodesFromMap(nodes, nodeId);
+  return lineage.length ? lineage[0].id : nodeId;
 }
 
 function publishResult(node, session, duplicate) {
