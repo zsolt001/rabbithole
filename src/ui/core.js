@@ -1,5 +1,5 @@
 import { systemClock } from "../core/clock.js";
-import { isNoteNode } from "../core/hole/ask.js";
+import { isNoteNode, isReviewedDocument } from "../core/hole/ask.js";
 import { BUNNY_MARK_SVG } from "../core/html/icons.js";
 import { shortId } from "../core/utils.js";
 import { mountCodeCopy } from "./code-copy.js";
@@ -80,6 +80,12 @@ function defaultCoreHooks() {
     diveToNode: function () {},
     openNode: function () {},
     ensureNodeHtml: function () {},
+    ensureRedlineHtml: function () {
+      return "";
+    },
+    ensureBaselineHtml: function () {
+      return "";
+    },
     persistNode: function () {},
     scheduleEdges: function () {},
     modeChanged: function () {},
@@ -618,7 +624,20 @@ export function buildDocContent(node, base) {
       node._contentDisposers.add(dispose);
       dc._rhDispose = dispose;
     } else {
-      dc.innerHTML = node.html || "";
+      const reviewed = isReviewedDocument(node);
+      if (reviewed) {
+        const mode = (node.view && node.view.reviewMode) || "marked";
+        dc.classList.add("rh-reviewed");
+        dc.classList.toggle("rh-redline", mode === "marked");
+        dc.innerHTML =
+          mode === "marked"
+            ? coreHooks.ensureRedlineHtml(node)
+            : mode === "original"
+              ? coreHooks.ensureBaselineHtml(node)
+              : node.html || "";
+      } else {
+        dc.innerHTML = node.html || "";
+      }
       const pdfExt = node.source;
       if (pdfExt && pdfExt.converting) {
         // Until the first converted chunk lands the body is still the raw

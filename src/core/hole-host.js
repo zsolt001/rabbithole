@@ -93,14 +93,20 @@ export function buildNodeAnsweredEvent(node, overrides = {}) {
   };
 }
 
-/** @param {HoleNode} node */
+/**
+ * The generic "wire" projection deliberately omits `extensions` (see
+ * `node-projection.test.mjs`), but a document update's whole purpose is to
+ * hand the browser the fresh `doc_edit` baseline, so this event reads the
+ * canonical residual `extensions` straight off the node instead.
+ * @param {HoleNode} node
+ */
 export function buildNodeDocumentUpdateEvent(node) {
   const projected = projectNode(node, "wire");
   return {
     type: "node_document_update",
     node_id: projected.id,
     markdown: projected.markdown,
-    extensions: projected.extensions,
+    extensions: JSON.parse(JSON.stringify(node.extensions || {})),
   };
 }
 

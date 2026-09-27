@@ -1,4 +1,5 @@
 import { createMarkdownRenderer, MARKDOWN_RENDERER_SENTINEL } from "../core/markdown-renderer.js";
+import { renderRedlineHtml } from "../core/redline/render.js";
 
 let assetData = null;
 let assetNames = null;
@@ -70,6 +71,27 @@ export function refreshNodeHtml(node) {
 export function ensureNodeHtml(node) {
   if (!node) return "";
   return node._htmlFor === node.markdown ? node.html : refreshNodeHtml(node);
+}
+
+export function ensureBaselineHtml(node) {
+  const baseline = node && node.extensions && node.extensions.doc_edit && node.extensions.doc_edit.baseline_markdown;
+  if (typeof baseline !== "string") return "";
+  if (node._baselineFor === baseline) return node._baselineHtml;
+  node._baselineHtml = renderMarkdownToHtml(baseline, { baseUrl: node.base_url || null, assetNames });
+  node._baselineFor = baseline;
+  return node._baselineHtml;
+}
+
+export function ensureRedlineHtml(node) {
+  const baseline = node && node.extensions && node.extensions.doc_edit && node.extensions.doc_edit.baseline_markdown;
+  if (typeof baseline !== "string") return "";
+  const key = baseline + "\u0000" + (node.markdown || "");
+  if (node._redlineFor === key) return node._redlineHtml;
+  node._redlineHtml = renderRedlineHtml(baseline, node.markdown || "", (md) =>
+    renderMarkdownToHtml(md, { baseUrl: node.base_url || null, assetNames }),
+  );
+  node._redlineFor = key;
+  return node._redlineHtml;
 }
 
 if (typeof window !== "undefined") {

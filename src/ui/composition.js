@@ -41,7 +41,7 @@ import { disposeImageUx, mountDocImages } from "./image-ux.js";
 import { createCleanupScope } from "./kit/scope.js";
 import { disposePalette, initPalette } from "./palette.js";
 import { disposeReader, initReader, openNode } from "./reader.js";
-import { ensureNodeHtml, setRendererAssetData } from "./renderer.js";
+import { ensureBaselineHtml, ensureNodeHtml, ensureRedlineHtml, setRendererAssetData } from "./renderer.js";
 import { closeSettingsSheet, initSettingsSheet, registerSettingsSection } from "./settings-sheet.js";
 import { disposeVisuals, initVisuals } from "./visuals.js";
 
@@ -117,6 +117,8 @@ export function createRabbitholeUi({ hydration, host, capabilities } = {}) {
       deleteAsset: deleteAsset,
       openNode: openNode,
       ensureNodeHtml: ensureNodeHtml,
+      ensureRedlineHtml: ensureRedlineHtml,
+      ensureBaselineHtml: ensureBaselineHtml,
       persistNode: host.persistNode || noop,
       revealDockedNote: revealDockedNote,
       mountDocImages: mountImages,
