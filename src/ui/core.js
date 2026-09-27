@@ -86,6 +86,9 @@ function defaultCoreHooks() {
     ensureBaselineHtml: function () {
       return "";
     },
+    buildOutlineRail: function () {
+      return null;
+    },
     persistNode: function () {},
     scheduleEdges: function () {},
     modeChanged: function () {},
@@ -631,9 +634,9 @@ export function buildDocContent(node, base) {
         dc.classList.toggle("rh-redline", mode === "marked");
         dc.innerHTML =
           mode === "marked"
-            ? coreHooks.ensureRedlineHtml(node)
+            ? coreHooks.ensureRedlineHtml(node) || node.html || ""
             : mode === "original"
-              ? coreHooks.ensureBaselineHtml(node)
+              ? coreHooks.ensureBaselineHtml(node) || node.html || ""
               : node.html || "";
       } else {
         dc.innerHTML = node.html || "";
@@ -648,6 +651,13 @@ export function buildDocContent(node, base) {
         dc.prepend(buildConvertProgress(node, pdfExt, committed));
       }
       mountDocMedia(dc, node, base);
+      if (reviewed && node.view && node.view.outline) {
+        const rail = coreHooks.buildOutlineRail ? coreHooks.buildOutlineRail(dc, node) : null;
+        if (rail) {
+          dc.classList.add("rh-has-outline");
+          dc.prepend(rail);
+        }
+      }
     }
   }
   return dc;

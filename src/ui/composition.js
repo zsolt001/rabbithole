@@ -26,6 +26,7 @@ import {
   scheduleEdges,
   setMode,
 } from "./canvas/index.js";
+import { buildOutlineRail } from "./canvas/outline-rail.js";
 import { disposeChrome, initChrome } from "./chrome-init.js";
 import { closed, disposeCore, frozen, initCore, nodes } from "./core.js";
 import {
@@ -119,6 +120,7 @@ export function createRabbitholeUi({ hydration, host, capabilities } = {}) {
       ensureNodeHtml: ensureNodeHtml,
       ensureRedlineHtml: ensureRedlineHtml,
       ensureBaselineHtml: ensureBaselineHtml,
+      buildOutlineRail: buildOutlineRail,
       persistNode: host.persistNode || noop,
       revealDockedNote: revealDockedNote,
       mountDocImages: mountImages,

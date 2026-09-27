@@ -1198,3 +1198,11 @@ body:not(.mode-canvas) #branch-undo { bottom: 84px; }
   transition: color var(--duration-fast) ease, background-color var(--duration-fast) ease, border-color var(--duration-fast) ease; }
 .rh-pdf-convert-cancel:hover:not(:disabled) { color: var(--fg); background: color-mix(in srgb, var(--fg) 4%, transparent); border-color: color-mix(in srgb, var(--fg) 12%, var(--border)); }
 .rh-pdf-convert-cancel:disabled { opacity: .55; cursor: default; }
+.doc-content.rh-has-outline { padding-left: 12.5em; position: relative; }
+.rh-outline { position: absolute; left: 0; top: 0; width: 11em; max-height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 0.15em; border-right: 1px solid var(--border); padding-right: 0.6em; }
+.rh-outline-item { display: block; color: var(--fg-faint); text-decoration: none; font-size: inherit; line-height: 1.3; padding: 0.15em 0; border-radius: 3px; }
+.rh-outline-item:hover, .rh-outline-item:focus-visible { color: var(--fg); outline: none; }
+.rh-outline-l2 { padding-left: 0.8em; }
+.rh-outline-l3 { padding-left: 1.6em; }
+.rh-outline-l4, .rh-outline-l5, .rh-outline-l6 { padding-left: 2.4em; }
+.rh-outline-changed::after { content: ""; display: inline-block; width: 0.4em; height: 0.4em; margin-left: 0.35em; border-radius: 50%; background: color-mix(in srgb, var(--accent) 80%, transparent); }
