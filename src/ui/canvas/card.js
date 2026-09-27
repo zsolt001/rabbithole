@@ -14,6 +14,7 @@ import { enableDrag, enableResize, layoutNode, onCardControl } from "./gestures.
 import { startNoteEditing } from "./inline-note.js";
 import { nodeMenuButton, syncCollapseButton } from "./menu.js";
 import { startTitleEditing } from "./note-convert.js";
+import { buildReviewPill } from "./review-controls.js";
 import { r } from "./runtime.js";
 import { closeCardMenu, raiseCard } from "./shared.js";
 
@@ -72,6 +73,11 @@ export function createNodeEl(node, enter) {
   acts.appendChild(openBtn);
   acts.appendChild(divider);
   if (!node._ephemeral) acts.appendChild(nodeMenuButton(node));
+  // Review-mode chip sits left of the title (the title is flex:1 and .card-acts
+  // float absolutely on the right, so a chip after the title would collide with
+  // them on long titles). Hidden unless the node is a reviewed document.
+  const reviewPill = buildReviewPill(node);
+  head.appendChild(reviewPill);
   head.appendChild(titleEl);
   head.appendChild(workflowEl);
   head.appendChild(acts);

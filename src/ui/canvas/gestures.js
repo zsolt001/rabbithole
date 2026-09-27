@@ -88,7 +88,7 @@ export function onPointerGesture(handle, onDown, onMove, onUp, scope) {
 // holds the controls, and a pointer that lands on one of those is operating the control,
 // not the card. Every head gesture owes that distinction the same answer.
 export function onCardControl(e) {
-  return !!e.target.closest(".card-btn, [contenteditable]");
+  return !!e.target.closest(".card-btn, .review-pill, [contenteditable]");
 }
 
 // A card gesture that can outrun the viewport. Two rules make that work:

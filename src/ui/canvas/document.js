@@ -7,6 +7,7 @@ import { appendOriginAttachmentThumbnails, originAttachmentNames } from "../orig
 import { buildOriginCrop } from "../origin-provenance.js";
 import { applyChildHighlights } from "../text-marks.js";
 import { autoGrowEl, cardButton } from "./card-composer.js";
+import { syncReviewPill } from "./review-controls.js";
 import { r } from "./runtime.js";
 
 export function fillBody(node) {
@@ -31,6 +32,11 @@ export function fillBody(node) {
   body.appendChild(dc);
   body.classList.toggle("pdf-body", dc.classList.contains("rh-pdf"));
   applyChildHighlights(dc, node);
+  // The card-head pill lives outside the body fillBody rebuilds, so re-sync it
+  // here: this is the one path every content change funnels through (create,
+  // document update, review-mode toggle), so the pill also appears the moment a
+  // document first becomes reviewed.
+  syncReviewPill(node);
   // The marks exist now, so the margin column that points at them can be built.
   r.lifecycle.hooks.renderDockedNotes(node);
 }

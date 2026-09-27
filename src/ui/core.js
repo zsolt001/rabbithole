@@ -655,7 +655,15 @@ export function buildDocContent(node, base) {
         const rail = coreHooks.buildOutlineRail ? coreHooks.buildOutlineRail(dc, node) : null;
         if (rail) {
           dc.classList.add("rh-has-outline");
-          dc.prepend(rail);
+          // Two-column grid: rail in column 1, the rendered body wrapped into
+          // column 2. Wrapping is what lets the rail be a single sticky grid
+          // item instead of an absolutely-positioned overlay that scrolled away
+          // with the tall content.
+          const body = document.createElement("div");
+          body.className = "rh-doc-body";
+          while (dc.firstChild) body.appendChild(dc.firstChild);
+          dc.appendChild(rail);
+          dc.appendChild(body);
         }
       }
     }
