@@ -1,4 +1,4 @@
-import { isDockedNote, isNoteNode, isReactionNote } from "../../core/hole/ask.js";
+import { isDockedNote, isNoteNode, isReactionNote, isReviewedDocument } from "../../core/hole/ask.js";
 import { deriveWorkflowStatus } from "../../core/hole/workflow.js";
 import { iconButtonMarkup } from "../../core/html/markup.js";
 import { changeNodeFontScale, childrenOf, closed, frozen, resetNodeFontScale, rootId } from "../core.js";
@@ -6,8 +6,10 @@ import { closestEl, qs } from "../dom.js";
 import { canSetWorkflowDone, setWorkflowDone } from "../workflow-status.js";
 import { cancelViewAnimation } from "./camera.js";
 import { cardButton } from "./card-composer.js";
+import { fillBody } from "./document.js";
 import { branchAllCollapsed, setBranchCollapsed, setChildrenCollapsed, toggleCollapse } from "./fold.js";
 import { convertNoteToAsk, startTitleEditing } from "./note-convert.js";
+import { persistCanvasExtension } from "./pins.js";
 import { r } from "./runtime.js";
 import { canPinWindow, nodePin, pinnedFontScale, setPinnedFontScale, setWindowPinned } from "./shared.js";
 
@@ -86,6 +88,18 @@ export function openCardMenu(node, trigger, openedByKeyboard) {
   doneButton.style.display = canSetWorkflowDone(node) ? "" : "none";
   doneButton.querySelector(".sm-label").textContent =
     deriveWorkflowStatus(node).id === "done" ? "Mark Not Done" : "Mark Done";
+  const reviewed = isReviewedDocument(node);
+  const viewModeButton = document.getElementById("cm-viewmode");
+  const outlineButton = document.getElementById("cm-outline");
+  viewModeButton.style.display = reviewed ? "" : "none";
+  outlineButton.style.display = reviewed ? "" : "none";
+  if (reviewed) {
+    const mode = (node.view && node.view.reviewMode) || "marked";
+    viewModeButton.querySelector(".sm-label").textContent =
+      mode === "marked" ? "Marked-up" : mode === "clean" ? "Clean" : "Original";
+    outlineButton.querySelector(".sm-label").textContent =
+      node.view && node.view.outline ? "Hide outline" : "Show outline";
+  }
   const pinButton = document.getElementById("cm-pin");
   const showPin = !frozen && canPinWindow(node);
   pinButton.style.display = showPin ? "" : "none";
@@ -112,6 +126,14 @@ export function onCardMenuClick(e) {
     return;
   }
   r.cardMenuController.close();
+  if (button.id === "cm-viewmode") {
+    cycleReviewMode(node);
+    return;
+  }
+  if (button.id === "cm-outline") {
+    toggleOutline(node);
+    return;
+  }
   if (button.id === "cm-copy") r.lifecycle.hooks.copyNodeMarkdown(node);
   else if (button.id === "cm-rename") startTitleEditing(node, node.titleEl);
   else if (button.id === "cm-convert") convertNoteToAsk(node, node.markdown);
@@ -176,4 +198,21 @@ export function runCollapseAction(node, action) {
   if (action === "collapse") toggleCollapse(node);
   else if (action === "collapse-branch") setBranchCollapsed(node, !branchAllCollapsed(node));
   else if (action === "collapse-children") setChildrenCollapsed(node, !childrenAllCollapsed(node));
+}
+
+const REVIEW_MODES = ["marked", "clean", "original"];
+
+function cycleReviewMode(node) {
+  const mode = (node.view && node.view.reviewMode) || "marked";
+  const next = REVIEW_MODES[(REVIEW_MODES.indexOf(mode) + 1) % REVIEW_MODES.length];
+  node.view = { ...(node.view || {}), reviewMode: next };
+  if (!frozen) persistCanvasExtension(node);
+  if (node.bodyEl) fillBody(node);
+}
+
+function toggleOutline(node) {
+  const on = !(node.view && node.view.outline);
+  node.view = { ...(node.view || {}), outline: on };
+  if (!frozen) persistCanvasExtension(node);
+  if (node.bodyEl) fillBody(node);
 }
