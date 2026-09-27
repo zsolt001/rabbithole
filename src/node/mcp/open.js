@@ -361,12 +361,19 @@ export async function sendToRabbithole({ holeId, operationId, title, content, pa
  * parentless lineage root of `nodeId` (falling back to root_id), then dispatches
  * a node_document_update on the live session or the stored hole.
  */
-/** @param {{sessionId?: string, holeId?: string, nodeId?: string, content: string, title?: string}} input */
-export async function updateDocument({ sessionId, holeId, nodeId, content, title }) {
+/** @param {{sessionId?: string, holeId?: string, nodeId?: string, content?: string, filePath?: string, title?: string}} input */
+export async function updateDocument({ sessionId, holeId, nodeId, content, filePath, title }) {
   sessionId = normalizeId(sessionId);
   holeId = normalizeId(holeId);
   nodeId = nodeId == null ? undefined : normalizeId(nodeId);
-  if (!String(content ?? "").trim()) throw new Error("content is required");
+  const hasInlineContent = !!String(content ?? "").trim();
+  const hasFilePath = !!String(filePath ?? "").trim();
+  if (hasInlineContent && hasFilePath) throw new Error("provide content or file_path, not both");
+  if (hasFilePath && (await isPdfFile(filePath))) throw new Error("file_path must be a markdown file, not a PDF");
+  // Symmetric with open_rabbithole: read the full document from disk instead of
+  // round-tripping large markdown through the tool argument.
+  content = await resolveMarkdown({ content, filePath });
+  if (!String(content ?? "").trim()) throw new Error("content or file_path is required");
 
   const session = sessionId ? getSession(sessionId) : getSessionByHole(holeId);
   if (session && !session.isClosed()) {

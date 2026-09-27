@@ -58,7 +58,10 @@ function validatePublish(params) {
 
 function validateUpdate(params) {
   if (!normalizeId(params.session_id) && !normalizeId(params.hole_id)) throw new Error("session_id or hole_id is required");
-  if (!String(params.content || "").trim()) throw new Error("content is required");
+  const hasContent = !!String(params.content || "").trim();
+  const hasFilePath = !!String(params.file_path || "").trim();
+  if (hasContent && hasFilePath) throw new Error("provide content or file_path, not both");
+  if (!hasContent && !hasFilePath) throw new Error("content or file_path is required");
 }
 
 function validateRead(params) {
@@ -258,21 +261,24 @@ export const toolDefinitions = [
     name: "update_document",
     description:
       "Push an edited document back into its Rabbithole node, shown as redlines against the text the reviewer opened. " +
-      "Use it for review edits: (1) edit the file on disk with your normal tools; (2) call update_document with node_id set to the document being reviewed and content set to the full new markdown; (3) answer the branch with a summary. " +
+      "Use it for review edits: (1) edit the file on disk with your normal tools; (2) call update_document with node_id set to the document being reviewed and file_path set to that edited file (or content set to the full new markdown); (3) answer the branch with a summary. " +
+      "Prefer file_path over content for large documents — it reads the file from disk instead of round-tripping the whole document through the argument. " +
       "The edit lands on the document at the top of that node's lineage, so branching under an independent document edits that document, not the original. Do not call this for a note, a PDF, or an answer branch.",
     input: {
       session_id: z.string().max(200).describe("Active session ID from open_rabbithole; use this or hole_id").optional(),
       hole_id: z.string().max(200).describe("Saved Rabbithole id; use this or session_id").optional(),
       node_id: z.string().max(200).describe("The document node being reviewed; resolves to its lineage root. Omit to target the root document").optional(),
-      content: z.string().max(10485760).describe("The full new markdown for the document"),
+      content: z.string().max(10485760).describe("The full new markdown for the document; provide this or file_path, not both").optional(),
+      file_path: z.string().max(4096).describe("Path to a markdown file holding the full new document; alternative to content, symmetric with open_rabbithole. Preferred for large documents").optional(),
       title: z.string().max(2000).describe("Optional new title").optional(),
     },
     validateInput: validateUpdate,
-    run: ({ session_id, hole_id, node_id, content, title }) => updateDocument({
+    run: ({ session_id, hole_id, node_id, content, file_path, title }) => updateDocument({
       sessionId: normalizeId(session_id),
       holeId: normalizeId(hole_id),
       nodeId: node_id == null ? undefined : normalizeId(node_id),
       content,
+      filePath: file_path,
       title,
     }),
   },
