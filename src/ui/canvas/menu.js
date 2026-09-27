@@ -1,4 +1,4 @@
-import { isDockedNote, isNoteNode, isReactionNote } from "../../core/hole/ask.js";
+import { isDockedNote, isNoteNode, isReactionNote, isReviewedDocument } from "../../core/hole/ask.js";
 import { deriveWorkflowStatus } from "../../core/hole/workflow.js";
 import { iconButtonMarkup } from "../../core/html/markup.js";
 import { changeNodeFontScale, childrenOf, closed, frozen, resetNodeFontScale, rootId } from "../core.js";
@@ -8,6 +8,7 @@ import { cancelViewAnimation } from "./camera.js";
 import { cardButton } from "./card-composer.js";
 import { branchAllCollapsed, setBranchCollapsed, setChildrenCollapsed, toggleCollapse } from "./fold.js";
 import { convertNoteToAsk, startTitleEditing } from "./note-convert.js";
+import { cycleReviewMode, outlineOn, reviewModeLabel, toggleOutline } from "./review-controls.js";
 import { r } from "./runtime.js";
 import { canPinWindow, nodePin, pinnedFontScale, setPinnedFontScale, setWindowPinned } from "./shared.js";
 
@@ -86,6 +87,15 @@ export function openCardMenu(node, trigger, openedByKeyboard) {
   doneButton.style.display = canSetWorkflowDone(node) ? "" : "none";
   doneButton.querySelector(".sm-label").textContent =
     deriveWorkflowStatus(node).id === "done" ? "Mark Not Done" : "Mark Done";
+  const reviewed = isReviewedDocument(node);
+  const viewModeButton = document.getElementById("cm-viewmode");
+  const outlineButton = document.getElementById("cm-outline");
+  viewModeButton.style.display = reviewed ? "" : "none";
+  outlineButton.style.display = reviewed ? "" : "none";
+  if (reviewed) {
+    viewModeButton.querySelector(".sm-label").textContent = reviewModeLabel(node);
+    outlineButton.querySelector(".sm-label").textContent = outlineOn(node) ? "Hide outline" : "Show outline";
+  }
   const pinButton = document.getElementById("cm-pin");
   const showPin = !frozen && canPinWindow(node);
   pinButton.style.display = showPin ? "" : "none";
@@ -112,6 +122,14 @@ export function onCardMenuClick(e) {
     return;
   }
   r.cardMenuController.close();
+  if (button.id === "cm-viewmode") {
+    cycleReviewMode(node);
+    return;
+  }
+  if (button.id === "cm-outline") {
+    toggleOutline(node);
+    return;
+  }
   if (button.id === "cm-copy") r.lifecycle.hooks.copyNodeMarkdown(node);
   else if (button.id === "cm-rename") startTitleEditing(node, node.titleEl);
   else if (button.id === "cm-convert") convertNoteToAsk(node, node.markdown);

@@ -145,6 +145,12 @@ export interface NodeUpdateEvent extends NodeTarget, NodePresentationFields {
   title?: unknown;
   markdown?: unknown;
 }
+export interface NodeDocumentUpdateEvent extends NodeTarget {
+  type: "node_document_update";
+  /** The full replacement markdown for the target document node. */
+  content?: unknown;
+  title?: unknown;
+}
 export interface NodesUpdateEvent { type: "nodes_update"; nodes?: unknown; }
 export interface ViewStateEvent { type: "view_state"; state?: unknown; }
 /** Internal engine event; not part of the MCP/SSE wire vocabulary. */
@@ -164,13 +170,14 @@ export interface BlockStateEvent extends NodeTarget {
 }
 
 export type DocEvent = BranchRequestEvent | NodeCreateEvent | NodeProgressEvent | NodeAnsweredEvent |
-  DeleteNodeEvent | NodeUpdateEvent | NodesUpdateEvent | ViewStateEvent |
+  DeleteNodeEvent | NodeUpdateEvent | NodeDocumentUpdateEvent | NodesUpdateEvent | ViewStateEvent |
   HoleTitleEvent | NodeOriginEvent | NodeExtensionsPatchEvent | BlockStateEvent;
 
 export interface ReduceEffects {
   node_id?: string;
   createdNode?: HoleNode;
   answeredNode?: HoleNode;
+  updatedNode?: HoleNode;
   deletedNodeIds?: string[];
   deletedNodes?: HoleNode[];
 }

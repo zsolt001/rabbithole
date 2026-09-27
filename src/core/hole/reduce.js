@@ -50,6 +50,8 @@ export function reduceHoleEvent(state, event, options = {}) {
       return reduceNodeDeleted(state, /** @type {DeleteNodeEvent} */ (event), options);
     case "node_update":
       return reduceNodeUpdate(state, /** @type {NodeUpdateEvent} */ (event), options);
+    case "node_document_update":
+      return reduceNodeDocumentUpdate(state, /** @type {import("../contracts/engine.js").NodeDocumentUpdateEvent} */ (event), options);
     case "nodes_update":
       return reduceNodesUpdate(state, /** @type {NodesUpdateEvent} */ (event), options);
     case "view_state":
@@ -385,6 +387,34 @@ function reduceNodeUpdate(state, event, options) {
   }
   nodes.set(nodeId, next);
   return withState({ ...state, nodes }, { node_id: nodeId });
+}
+
+/** @param {HoleState} state @param {import("../contracts/engine.js").NodeDocumentUpdateEvent} event @param {ReduceOptions} options */
+function reduceNodeDocumentUpdate(state, event, options) {
+  const nodeId = String(event.node_id || "");
+  const node = state.nodes.get(nodeId);
+  if (!node) return withState(state);
+  const hasQuestion = !!(node.origin && typeof node.origin === "object" && node.origin.question);
+  if (isNoteNode(node) || node.source || hasQuestion) {
+    throw new Error(`Node ${nodeId} is not a document node and cannot be edited`);
+  }
+  const content = normalizeBlockIds(String(event.content ?? ""), { idFactory: options.idFactory }).markdown;
+  const title = typeof event.title === "string" && event.title.trim() ? event.title.trim() : null;
+  // Same node identity signals a no-op to SessionBroadcast.updateNode, which
+  // skips the SSE broadcast; do not replace this with a fresh-but-equal node.
+  if (content === node.markdown && !title) return withState(state, { updatedNode: node });
+  const next = { ...node, read: Boolean(node.read) };
+  if (!node.extensions?.doc_edit) {
+    next.extensions = {
+      ...(node.extensions || {}),
+      doc_edit: { baseline_markdown: node.markdown, first_edit_at: options.now ?? new Date().toISOString() },
+    };
+  }
+  next.markdown = content;
+  if (title) next.title = title;
+  const nodes = cloneNodes(state, options);
+  nodes.set(nodeId, /** @type {HoleNode} */ (next));
+  return withState({ ...state, nodes }, { updatedNode: /** @type {HoleNode} */ (next) });
 }
 
 /** @param {HoleState} state @param {NodesUpdateEvent} event @param {ReduceOptions} options */

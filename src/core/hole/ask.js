@@ -28,6 +28,11 @@ export function isDockedNote(node) {
     && (node?.view?.docked === true || node?.extensions?.note?.docked === true);
 }
 
+/** @param {Record<string, any> | null | undefined} node */
+export function isReviewedDocument(node) {
+  return !!node?.extensions?.doc_edit;
+}
+
 /** @param {{ origin?: unknown, parent_id?: unknown, view?: any, extensions?: any } | null | undefined} node */
 export function isReactionNote(node) {
   return isDockedNote(node)

@@ -126,6 +126,8 @@ export const CANVAS_SHELL = `
   </div>
   <div class="sm-sep"></div>
   ${buttonMarkup({ bare: true, className: "sm-item", id: "cm-copy", role: "menuitem", tabIndex: -1, label: "Copy as Markdown", labelClass: "sm-label", svgIconHtml: '<span class="sm-ic">' + iconSvg("copy") + '</span>' })}
+  ${buttonMarkup({ bare: true, className: "sm-item", id: "cm-viewmode", role: "menuitem", tabIndex: -1, label: "Marked-up", labelClass: "sm-label", svgIconHtml: '<span class="sm-ic">' + iconSvg("rename") + '</span>' })}
+  ${buttonMarkup({ bare: true, className: "sm-item", id: "cm-outline", role: "menuitem", tabIndex: -1, label: "Show outline", labelClass: "sm-label", svgIconHtml: '<span class="sm-ic">' + iconSvg("trail") + '</span>' })}
   ${buttonMarkup({ bare: true, className: "sm-item", id: "cm-rename", role: "menuitem", tabIndex: -1, label: "Rename", labelClass: "sm-label", svgIconHtml: '<span class="sm-ic">' + iconSvg("rename") + '</span>' })}
   ${buttonMarkup({ bare: true, className: "sm-item", id: "cm-convert", role: "menuitem", tabIndex: -1, label: "Convert to Ask", labelClass: "sm-label", svgIconHtml: '<span class="sm-ic">' + iconSvg("question") + '</span>' })}
   ${buttonMarkup({ bare: true, className: "sm-item", id: "cm-done", role: "menuitem", tabIndex: -1, label: "Mark Done", labelClass: "sm-label", svgIconHtml: '<span class="sm-ic">' + iconSvg("check") + '</span>' })}

@@ -1,4 +1,4 @@
-import { openRabbithole, answerBranch, listRabbitholes, readRabbithole, sendToRabbithole } from "./open.js";
+import { openRabbithole, answerBranch, listRabbitholes, readRabbithole, sendToRabbithole, updateDocument } from "./open.js";
 import { getOpencodeDriver } from "./opencode-driver.js";
 import { normalizeBaseUrl } from "../../core/base-url.js";
 import { normalizeId } from "../../core/utils.js";
@@ -53,6 +53,11 @@ function validateAnswer(params) {
 function validatePublish(params) {
   if (!normalizeId(params.hole_id)) throw new Error("hole_id is required");
   if (!normalizeId(params.operation_id)) throw new Error("operation_id is required");
+  if (!String(params.content || "").trim()) throw new Error("content is required");
+}
+
+function validateUpdate(params) {
+  if (!normalizeId(params.session_id) && !normalizeId(params.hole_id)) throw new Error("session_id or hole_id is required");
   if (!String(params.content || "").trim()) throw new Error("content is required");
 }
 
@@ -247,6 +252,28 @@ export const toolDefinitions = [
       content,
       parentNodeId: parent_node_id == null ? undefined : normalizeId(parent_node_id),
       kind,
+    }),
+  },
+  {
+    name: "update_document",
+    description:
+      "Push an edited document back into its Rabbithole node, shown as redlines against the text the reviewer opened. " +
+      "Use it for review edits: (1) edit the file on disk with your normal tools; (2) call update_document with node_id set to the document being reviewed and content set to the full new markdown; (3) answer the branch with a summary. " +
+      "The edit lands on the document at the top of that node's lineage, so branching under an independent document edits that document, not the original. Do not call this for a note, a PDF, or an answer branch.",
+    input: {
+      session_id: z.string().max(200).describe("Active session ID from open_rabbithole; use this or hole_id").optional(),
+      hole_id: z.string().max(200).describe("Saved Rabbithole id; use this or session_id").optional(),
+      node_id: z.string().max(200).describe("The document node being reviewed; resolves to its lineage root. Omit to target the root document").optional(),
+      content: z.string().max(10485760).describe("The full new markdown for the document"),
+      title: z.string().max(2000).describe("Optional new title").optional(),
+    },
+    validateInput: validateUpdate,
+    run: ({ session_id, hole_id, node_id, content, title }) => updateDocument({
+      sessionId: normalizeId(session_id),
+      holeId: normalizeId(hole_id),
+      nodeId: node_id == null ? undefined : normalizeId(node_id),
+      content,
+      title,
     }),
   },
   {

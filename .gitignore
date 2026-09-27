@@ -27,3 +27,6 @@ prototypes/
 pdf-reader-*.png
 
 playground/
+
+# Subagent-driven development scratch (git-ignored workspace)
+.superpowers/

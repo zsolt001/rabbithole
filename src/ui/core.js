@@ -1,5 +1,5 @@
 import { systemClock } from "../core/clock.js";
-import { isNoteNode } from "../core/hole/ask.js";
+import { isNoteNode, isReviewedDocument } from "../core/hole/ask.js";
 import { BUNNY_MARK_SVG } from "../core/html/icons.js";
 import { shortId } from "../core/utils.js";
 import { mountCodeCopy } from "./code-copy.js";
@@ -80,6 +80,15 @@ function defaultCoreHooks() {
     diveToNode: function () {},
     openNode: function () {},
     ensureNodeHtml: function () {},
+    ensureRedlineHtml: function () {
+      return "";
+    },
+    ensureBaselineHtml: function () {
+      return "";
+    },
+    buildOutlineRail: function () {
+      return null;
+    },
     persistNode: function () {},
     scheduleEdges: function () {},
     modeChanged: function () {},
@@ -618,7 +627,20 @@ export function buildDocContent(node, base) {
       node._contentDisposers.add(dispose);
       dc._rhDispose = dispose;
     } else {
-      dc.innerHTML = node.html || "";
+      const reviewed = isReviewedDocument(node);
+      if (reviewed) {
+        const mode = (node.view && node.view.reviewMode) || "marked";
+        dc.classList.add("rh-reviewed");
+        dc.classList.toggle("rh-redline", mode === "marked");
+        dc.innerHTML =
+          mode === "marked"
+            ? coreHooks.ensureRedlineHtml(node) || node.html || ""
+            : mode === "original"
+              ? coreHooks.ensureBaselineHtml(node) || node.html || ""
+              : node.html || "";
+      } else {
+        dc.innerHTML = node.html || "";
+      }
       const pdfExt = node.source;
       if (pdfExt && pdfExt.converting) {
         // Until the first converted chunk lands the body is still the raw
@@ -629,6 +651,21 @@ export function buildDocContent(node, base) {
         dc.prepend(buildConvertProgress(node, pdfExt, committed));
       }
       mountDocMedia(dc, node, base);
+      if (reviewed && node.view && node.view.outline) {
+        const rail = coreHooks.buildOutlineRail ? coreHooks.buildOutlineRail(dc, node) : null;
+        if (rail) {
+          dc.classList.add("rh-has-outline");
+          // Two-column grid: rail in column 1, the rendered body wrapped into
+          // column 2. Wrapping is what lets the rail be a single sticky grid
+          // item instead of an absolutely-positioned overlay that scrolled away
+          // with the tall content.
+          const body = document.createElement("div");
+          body.className = "rh-doc-body";
+          while (dc.firstChild) body.appendChild(dc.firstChild);
+          dc.appendChild(rail);
+          dc.appendChild(body);
+        }
+      }
     }
   }
   return dc;

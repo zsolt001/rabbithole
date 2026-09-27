@@ -94,6 +94,23 @@ export function buildNodeAnsweredEvent(node, overrides = {}) {
 }
 
 /**
+ * The generic "wire" projection deliberately omits `extensions` (see
+ * `node-projection.test.mjs`), but a document update's whole purpose is to
+ * hand the browser the fresh `doc_edit` baseline, so this event reads the
+ * canonical residual `extensions` straight off the node instead.
+ * @param {HoleNode} node
+ */
+export function buildNodeDocumentUpdateEvent(node) {
+  const projected = projectNode(node, "wire");
+  return {
+    type: "node_document_update",
+    node_id: projected.id,
+    markdown: projected.markdown,
+    extensions: JSON.parse(JSON.stringify(node.extensions || {})),
+  };
+}
+
+/**
  * Apply a browser event to canonical state and request its debounced persist.
  * @param {any} payload
  * @param {{ dispatch: (event: any) => unknown, scheduleSave: () => void }} host
