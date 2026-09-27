@@ -12,7 +12,7 @@ export function buildOutline(markdown) {
     if (FENCE.test(line)) { inFence = !inFence; continue; }
     if (inFence) continue;
     const m = HEADING.exec(line);
-    if (m) out.push({ level: m[1].length, text: m[2].trim(), index: index++ });
+    if (m) out.push({ level: String(m[1]).length, text: String(m[2]).trim(), index: index++ });
   }
   return out;
 }
@@ -26,14 +26,16 @@ function normalizeHeading(text) {
 function sectionsByHeading(markdown) {
   /** @type {Map<string, string>} */
   const sections = new Map();
+  /** @type {string | null} */
   let key = null;
+  /** @type {string[]} */
   let body = [];
   let inFence = false;
   const flush = () => { if (key !== null) sections.set(key, body.join("\n").trim()); };
   for (const line of String(markdown ?? "").split("\n")) {
     if (FENCE.test(line)) inFence = !inFence;
     const m = inFence ? null : HEADING.exec(line);
-    if (m) { flush(); key = normalizeHeading(m[2]); body = []; }
+    if (m) { flush(); key = normalizeHeading(String(m[2])); body = []; }
     else if (key !== null) body.push(line);
   }
   flush();

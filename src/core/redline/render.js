@@ -15,10 +15,10 @@ export function renderRedlineHtml(baseline, current, renderMarkdown) {
   const ops = diffBlocks(splitBlocks(baseline), splitBlocks(current));
   let html = "";
   for (const op of ops) {
-    if (op.type === "equal") html += renderMarkdown(op.after);
-    else if (op.type === "insert") html += `<div class="rh-ins-block">${renderMarkdown(op.after)}</div>`;
-    else if (op.type === "delete") html += `<div class="rh-del-block">${renderMarkdown(op.before)}</div>`;
-    else html += renderMarkdown(wrapWordRuns(op.before, op.after));
+    if (op.type === "equal") html += renderMarkdown(op.after ?? "");
+    else if (op.type === "insert") html += `<div class="rh-ins-block">${renderMarkdown(op.after ?? "")}</div>`;
+    else if (op.type === "delete") html += `<div class="rh-del-block">${renderMarkdown(op.before ?? "")}</div>`;
+    else html += renderMarkdown(wrapWordRuns(op.before ?? "", op.after ?? ""));
   }
   return substituteSentinels(html);
 }

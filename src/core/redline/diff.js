@@ -1,13 +1,20 @@
 import { tokenizeWords } from "./tokens.js";
 
-/** Longest-common-subsequence indices over two arrays compared by ===. */
+/**
+ * Longest-common-subsequence indices over two arrays compared by ===.
+ * @param {string[]} a
+ * @param {string[]} b
+ * @returns {Array<[number, number]>}
+ */
 function lcs(a, b) {
   const n = a.length;
   const m = b.length;
   const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
   for (let i = n - 1; i >= 0; i--) {
+    const cur = /** @type {Uint32Array} */ (dp[i]);
+    const nxt = /** @type {Uint32Array} */ (dp[i + 1]);
     for (let j = m - 1; j >= 0; j--) {
-      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+      cur[j] = a[i] === b[j] ? (nxt[j + 1] ?? 0) + 1 : Math.max(nxt[j] ?? 0, cur[j + 1] ?? 0);
     }
   }
   /** @type {Array<[number, number]>} */
@@ -16,8 +23,12 @@ function lcs(a, b) {
   let j = 0;
   while (i < n && j < m) {
     if (a[i] === b[j]) { pairs.push([i, j]); i++; j++; }
-    else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
-    else j++;
+    else {
+      const cur = /** @type {Uint32Array} */ (dp[i]);
+      const nxt = /** @type {Uint32Array} */ (dp[i + 1]);
+      if ((nxt[j] ?? 0) >= (cur[j + 1] ?? 0)) i++;
+      else j++;
+    }
   }
   return pairs;
 }
@@ -27,6 +38,7 @@ export function diffTokens(before, after) {
   const pairs = lcs(before, after);
   /** @type {Array<{ type: "equal"|"insert"|"delete", tokens: string[] }>} */
   const runs = [];
+  /** @param {"equal"|"insert"|"delete"} type @param {string} token */
   const push = (type, token) => {
     const last = runs[runs.length - 1];
     if (last && last.type === type) last.tokens.push(token);
@@ -35,13 +47,13 @@ export function diffTokens(before, after) {
   let i = 0;
   let j = 0;
   for (const [pi, pj] of pairs) {
-    while (i < pi) push("delete", before[i++]);
-    while (j < pj) push("insert", after[j++]);
-    push("equal", after[j]);
+    while (i < pi) push("delete", String(before[i++]));
+    while (j < pj) push("insert", String(after[j++]));
+    push("equal", String(after[j]));
     i++; j++;
   }
-  while (i < before.length) push("delete", before[i++]);
-  while (j < after.length) push("insert", after[j++]);
+  while (i < before.length) push("delete", String(before[i++]));
+  while (j < after.length) push("insert", String(after[j++]));
   return runs;
 }
 
@@ -56,6 +68,7 @@ export function diffBlocks(beforeBlocks, afterBlocks) {
   const pairs = lcs(beforeBlocks, afterBlocks);
   /** @type {Array<{ type: "equal"|"insert"|"delete"|"change", before?: string, after?: string }>} */
   const ops = [];
+  /** @param {number} bStart @param {number} bEnd @param {number} aStart @param {number} aEnd */
   const emitGap = (bStart, bEnd, aStart, aEnd) => {
     const bGap = beforeBlocks.slice(bStart, bEnd);
     const aGap = afterBlocks.slice(aStart, aEnd);
