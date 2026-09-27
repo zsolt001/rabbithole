@@ -400,13 +400,7 @@ function reduceNodeDocumentUpdate(state, event, options) {
   }
   const content = normalizeBlockIds(String(event.content ?? ""), { idFactory: options.idFactory }).markdown;
   const title = typeof event.title === "string" && event.title.trim() ? event.title.trim() : null;
-  if (content === node.markdown && !title) {
-    if (node.extensions) return withState(state, { updatedNode: node });
-    const normalized = /** @type {HoleNode} */ ({ ...node, extensions: {} });
-    const nodes = cloneNodes(state, options);
-    nodes.set(nodeId, normalized);
-    return withState({ ...state, nodes }, { updatedNode: normalized });
-  }
+  if (content === node.markdown && !title) return withState(state, { updatedNode: node });
   const next = { ...node, read: Boolean(node.read) };
   if (!node.extensions?.doc_edit) {
     next.extensions = {

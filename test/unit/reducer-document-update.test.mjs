@@ -34,7 +34,7 @@ console.log("ok second edit keeps baseline");
 
 // Identical content is a no-op: no doc_edit created, state unchanged.
 let noop = reduceHoleEvent(baseHole(), { type: "node_document_update", node_id: "root", content: "# Title\n\nOriginal body." }, OPTS);
-assert.equal(noop.state.nodes.get("root").extensions.doc_edit, undefined);
+assert.equal(noop.state.nodes.get("root").extensions?.doc_edit, undefined);
 console.log("ok identical content no-op");
 
 // Reject a note node.
