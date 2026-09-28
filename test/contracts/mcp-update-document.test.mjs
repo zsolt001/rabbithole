@@ -56,11 +56,45 @@ hole = await defaultFsStore.loadHole(holeId);
 assert.equal(hole.nodes.find((n) => n.id === "root").markdown, "# Root\n\nFallback edit.");
 console.log("ok fallback to root_id");
 
+// file_path push reads the document from disk and captures the baseline.
+holeId = await seed();
+const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "rabbithole-update-file-"));
+const mdPath = path.join(tmpDir, "doc.md");
+await fs.writeFile(mdPath, "# Root\n\nFrom disk.", "utf-8");
+await updateDocument({ holeId, nodeId: "root", filePath: mdPath });
+hole = await defaultFsStore.loadHole(holeId);
+root = hole.nodes.find((n) => n.id === "root");
+assert.equal(root.markdown, "# Root\n\nFrom disk.");
+assert.equal(root.extensions.doc_edit.baseline_markdown, "# Root\n\nOriginal.");
+console.log("ok file_path push reads from disk and captures baseline");
+
+// Neither content nor file_path rejects.
+await updateDocument({ holeId: await seed(), nodeId: "root" }).then(
+  () => assert.fail("update with neither content nor file_path should reject"),
+  (err) => assert.match(String(err.message), /content or file_path/i),
+);
+console.log("ok neither content nor file_path rejected");
+
+// Both content and file_path fails loud.
+await updateDocument({ holeId: await seed(), nodeId: "root", content: "# Root\n\nInline.", filePath: mdPath }).then(
+  () => assert.fail("update with both content and file_path should reject"),
+  (err) => assert.match(String(err.message), /not both/i),
+);
+console.log("ok both content and file_path rejected");
+
+// A PDF file_path is rejected — edits are markdown, not PDFs.
+await updateDocument({ holeId: await seed(), nodeId: "root", filePath: path.join(tmpDir, "scan.pdf") }).then(
+  () => assert.fail("update with a PDF file_path should reject"),
+  (err) => assert.match(String(err.message), /markdown|pdf/i),
+);
+console.log("ok pdf file_path rejected");
+
 // Tool shape assertion
 const { toolDefinitions } = await import("../../src/node/mcp/tools.js");
 const tool = toolDefinitions.find((t) => t.name === "update_document");
 assert.ok(tool, "update_document tool is registered");
-assert.ok(tool.input.content && tool.input.hole_id && tool.input.node_id, "declares content, hole_id, node_id");
-assert.throws(() => tool.validateInput({ hole_id: "h", content: "   " }), /content is required/);
+assert.ok(tool.input.content && tool.input.file_path && tool.input.hole_id && tool.input.node_id, "declares content, file_path, hole_id, node_id");
+assert.throws(() => tool.validateInput({ hole_id: "h" }), /content or file_path is required/);
+assert.throws(() => tool.validateInput({ hole_id: "h", content: "x", file_path: "/tmp/x.md" }), /not both/);
 assert.throws(() => tool.validateInput({ content: "x" }), /session_id or hole_id/);
 console.log("ok update_document tool shape");
