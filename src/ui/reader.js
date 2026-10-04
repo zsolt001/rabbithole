@@ -327,9 +327,9 @@ export function renderReaderBody() {
     if (canSetWorkflowDone(node)) workflow.appendChild(workflowDoneButton(node, "workflow-done-action"));
     col.appendChild(workflow);
   }
-  // Reviewed documents carry their own control strip in the reader: the card's
-  // header pill and ⋯ menu aren't reachable from the expanded view, so the
-  // review-mode switch and outline toggle live here, directly above the body.
+  // Documents carry their own control strip in the reader: the card's header
+  // pill and ⋯ menu aren't reachable from the expanded view, so the outline
+  // toggle (and, once edited, the review-mode switch) live here, above the body.
   const reviewStrip = buildReaderReviewStrip(node);
   if (reviewStrip) col.appendChild(reviewStrip);
   const dc = buildDocContent(node, READER_BASE);

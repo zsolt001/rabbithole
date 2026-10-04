@@ -31,6 +31,18 @@ try {
   const page = await context.newPage();
   await page.goto(session.url, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".card.root .doc-content");
+
+  // An unedited document already offers the outline, but not the review modes.
+  await page.locator(".card.root .card-more").click();
+  assert.equal(await page.locator("#cm-viewmode").isVisible(), false);
+  await page.locator("#cm-outline").click();
+  await page.locator(".card.root .doc-content .rh-outline .rh-outline-item").first().waitFor();
+  assert.equal(await page.locator(".card.root .review-pill").isVisible(), false);
+  await page.locator(".card.root .card-more").click();
+  await page.locator("#cm-outline").click();
+  await page.waitForFunction(() => !document.querySelector(".card.root .doc-content .rh-outline"));
+  console.log("ok unedited document toggles the outline");
+
   await session.updateNode({ type: "node_document_update", node_id: "root", content: "# Report\n\nThe slow brown fox.\n\n## Details\n\nMore." });
 
   // Default view is marked-up.

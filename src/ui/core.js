@@ -1,5 +1,5 @@
 import { systemClock } from "../core/clock.js";
-import { isNoteNode, isReviewedDocument } from "../core/hole/ask.js";
+import { isEditableDocument, isNoteNode, isReviewedDocument } from "../core/hole/ask.js";
 import { BUNNY_MARK_SVG } from "../core/html/icons.js";
 import { shortId } from "../core/utils.js";
 import { mountCodeCopy } from "./code-copy.js";
@@ -627,7 +627,9 @@ export function buildDocContent(node, base) {
       node._contentDisposers.add(dispose);
       dc._rhDispose = dispose;
     } else {
+      const editable = isEditableDocument(node);
       const reviewed = isReviewedDocument(node);
+      dc.classList.toggle("rh-document", editable);
       if (reviewed) {
         const mode = (node.view && node.view.reviewMode) || "marked";
         dc.classList.add("rh-reviewed");
@@ -651,7 +653,7 @@ export function buildDocContent(node, base) {
         dc.prepend(buildConvertProgress(node, pdfExt, committed));
       }
       mountDocMedia(dc, node, base);
-      if (reviewed && node.view && node.view.outline) {
+      if (editable && node.view && node.view.outline) {
         const rail = coreHooks.buildOutlineRail ? coreHooks.buildOutlineRail(dc, node) : null;
         if (rail) {
           dc.classList.add("rh-has-outline");

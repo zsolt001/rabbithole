@@ -33,6 +33,17 @@ export function isReviewedDocument(node) {
   return !!node?.extensions?.doc_edit;
 }
 
+/*
+ * A markdown document update_document may target: not a note, not a PDF, not
+ * an answer card. It earns the document reading layout (outline, wider
+ * measure) before its first edit; isReviewedDocument adds the review modes.
+ */
+/** @param {Record<string, any> | null | undefined} node */
+export function isEditableDocument(node) {
+  if (!node || isNoteNode(node) || node.source) return false;
+  return !(node.origin && typeof node.origin === "object" && node.origin.question);
+}
+
 /** @param {{ origin?: unknown, parent_id?: unknown, view?: any, extensions?: any } | null | undefined} node */
 export function isReactionNote(node) {
   return isDockedNote(node)
