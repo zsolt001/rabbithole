@@ -10,7 +10,7 @@ import {
   projectNode,
   stripNodeAttention,
 } from "./node.js";
-import { askOfNode, isNoteNode, makeTranscribeAsk } from "./ask.js";
+import { askOfNode, isEditableDocument, isNoteNode, makeTranscribeAsk } from "./ask.js";
 import { normalizeAnchor } from "./anchor.js";
 import { normalizeBookmark, normalizeViewState } from "./bookmark.js";
 import { collectSubtreeIds } from "./tree.js";
@@ -394,8 +394,7 @@ function reduceNodeDocumentUpdate(state, event, options) {
   const nodeId = String(event.node_id || "");
   const node = state.nodes.get(nodeId);
   if (!node) return withState(state);
-  const hasQuestion = !!(node.origin && typeof node.origin === "object" && node.origin.question);
-  if (isNoteNode(node) || node.source || hasQuestion) {
+  if (!isEditableDocument(node)) {
     throw new Error(`Node ${nodeId} is not a document node and cannot be edited`);
   }
   const content = normalizeBlockIds(String(event.content ?? ""), { idFactory: options.idFactory }).markdown;

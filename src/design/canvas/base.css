@@ -1201,14 +1201,17 @@ body:not(.mode-canvas) #branch-undo { bottom: 84px; }
 .doc-content.rh-has-outline { display: grid; grid-template-columns: var(--rh-outline-w) minmax(0, 1fr); column-gap: 1.75em; align-items: start; }
 .rh-doc-body { grid-column: 2; min-width: 0; }
 .rh-outline { grid-column: 1; position: sticky; top: 0.25em; align-self: start; max-height: calc(100vh - 1em); overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 0.15em; border-right: 1px solid var(--border); padding-right: 0.6em; }
-/* Expanded (reader) reviewed-document: it earns more width than the reader's
-   narrow reading measure (that measure stays for ordinary docs). Base reviewed
-   width is 90% of the viewport; turning the outline on takes the full width so
-   the rail is added room, not subtracted from the prose. Order matters: the
-   outline rule follows the base rule so it wins (equal specificity) when both
-   match — an outline only ever appears on a reviewed doc. */
-.reader-col:has(> .doc-content.rh-reviewed) { max-width: 90%; }
-.reader-col:has(> .doc-content.rh-has-outline) { max-width: 100%; }
+/* Expanded (reader) document: it earns more width than the reader's narrow
+   reading measure (that measure stays for answer cards and notes). Base
+   document width is 90% of the viewport; turning the outline on takes the full
+   width so the rail is added room, not subtracted from the prose. Order
+   matters: the outline rule follows the base rule so it wins (equal
+   specificity) when both match — an outline only ever appears on a document.
+   Compact screens keep their full-width column (see the compact media query). */
+@media not ((hover: none) or (pointer: coarse) or (max-width: 760px)) {
+  .reader-col:has(> .doc-content.rh-document) { max-width: 90%; }
+  .reader-col:has(> .doc-content.rh-has-outline) { max-width: 100%; }
+}
 /* Card-head review-mode chip: shows the current view and cycles it on click.
    Marked-up (the redline) is accent-tinted so an unread diff reads at a glance;
    Clean/Original stay neutral. */

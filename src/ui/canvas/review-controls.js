@@ -1,13 +1,14 @@
-import { isReviewedDocument } from "../../core/hole/ask.js";
+import { isEditableDocument, isReviewedDocument } from "../../core/hole/ask.js";
 import { currentNodeId, frozen, mode, nodes, readerMain } from "../core.js";
 import { renderReaderBody } from "../reader.js";
 import { fillBody } from "./document.js";
 import { persistCanvasExtension } from "./pins.js";
 
 /*
- * Review-view state (redline mode + outline) for a reviewed document, shared by
- * the three surfaces that switch it: the card-head pill, the reader strip, and
- * the card menu. Each mutator persists node.view and refreshes whatever surfaces
+ * Review-view state (redline mode + outline) for a document, shared by the
+ * three surfaces that switch it: the card-head pill, the reader strip, and the
+ * card menu. The outline is offered on any editable document; the redline mode
+ * only once it has been edited. Each mutator persists node.view and refreshes whatever surfaces
  * are live, so the pill, the reader controls, and the menu labels never disagree.
  */
 
@@ -90,10 +91,26 @@ export function syncReviewPill(node) {
 // --- Reader control strip --------------------------------------------------
 
 export function buildReaderReviewStrip(node) {
-  if (!isReviewedDocument(node)) return null;
+  if (!isEditableDocument(node)) return null;
   const strip = document.createElement("div");
   strip.className = "reader-review-strip";
+  if (isReviewedDocument(node)) strip.appendChild(buildModeSwitch(node));
 
+  const outline = document.createElement("button");
+  outline.type = "button";
+  outline.className = "rrs-outline" + (outlineOn(node) ? " is-active" : "");
+  outline.textContent = "Outline";
+  outline.setAttribute("aria-pressed", outlineOn(node) ? "true" : "false");
+  outline.title = outlineOn(node) ? "Hide the section outline" : "Show the section outline";
+  outline.addEventListener("click", function () {
+    toggleOutline(node);
+  });
+  strip.appendChild(outline);
+
+  return strip;
+}
+
+function buildModeSwitch(node) {
   const seg = document.createElement("div");
   seg.className = "rrs-seg";
   seg.setAttribute("role", "group");
@@ -110,18 +127,5 @@ export function buildReaderReviewStrip(node) {
     });
     seg.appendChild(b);
   }
-  strip.appendChild(seg);
-
-  const outline = document.createElement("button");
-  outline.type = "button";
-  outline.className = "rrs-outline" + (outlineOn(node) ? " is-active" : "");
-  outline.textContent = "Outline";
-  outline.setAttribute("aria-pressed", outlineOn(node) ? "true" : "false");
-  outline.title = outlineOn(node) ? "Hide the section outline" : "Show the section outline";
-  outline.addEventListener("click", function () {
-    toggleOutline(node);
-  });
-  strip.appendChild(outline);
-
-  return strip;
+  return seg;
 }
