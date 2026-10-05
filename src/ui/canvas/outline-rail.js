@@ -2,11 +2,12 @@ import { changedSectionHeadings, normalizeHeading } from "../../core/redline/out
 import { frozen } from "../core.js";
 import { persistCanvasExtension } from "./pins.js";
 
-// Outline width lives in node.view.outlineWidth, in em of the document's own
-// font size, so a card and its expanded reader share one width at any zoom.
-const OUTLINE_MIN_EM = 6;
-const OUTLINE_MAX_EM = 32;
-const OUTLINE_KEY_STEP_EM = 1;
+// Outline width lives in node.view.outlineFraction, a share of the document's
+// width, so the rail keeps its proportion between a small card and the wide
+// expanded reader. (An earlier em-based outlineWidth is ignored and dropped.)
+const OUTLINE_MIN_FRACTION = 0.08;
+const OUTLINE_MAX_FRACTION = 0.5;
+const OUTLINE_KEY_STEP = 0.02;
 
 /** @param {HTMLElement} dc @param {any} node @returns {HTMLElement | null} */
 export function buildOutlineRail(dc, node) {
@@ -38,36 +39,47 @@ export function buildOutlineRail(dc, node) {
   pane.className = "rh-outline-pane";
   pane.appendChild(nav);
   pane.appendChild(buildResizeHandle(dc, node));
-  const width = storedOutlineWidth(node);
-  if (width != null) dc.style.setProperty("--rh-outline-w", width + "em");
+  const fraction = storedOutlineFraction(node);
+  if (fraction != null) dc.style.setProperty("--rh-outline-w", toPercent(fraction));
   return pane;
 }
 
-function storedOutlineWidth(node) {
-  const value = node.view && node.view.outlineWidth;
-  return Number.isFinite(value) ? clampOutlineWidth(value) : null;
+function storedOutlineFraction(node) {
+  const value = node.view && node.view.outlineFraction;
+  return Number.isFinite(value) ? clampOutlineFraction(value) : null;
 }
 
-function clampOutlineWidth(em) {
-  return Math.round(Math.min(OUTLINE_MAX_EM, Math.max(OUTLINE_MIN_EM, em)) * 10) / 10;
+function clampOutlineFraction(fraction) {
+  return Math.round(Math.min(OUTLINE_MAX_FRACTION, Math.max(OUTLINE_MIN_FRACTION, fraction)) * 1000) / 1000;
+}
+
+function toPercent(fraction) {
+  return fraction * 100 + "%";
+}
+
+// Grid percentages resolve against the content box, so measure that.
+function contentWidth(dc) {
+  const style = getComputedStyle(dc);
+  return dc.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0) || 1;
 }
 
 // Every live surface of this node (card body and reader) follows the drag.
-function applyOutlineWidth(node, em) {
+function applyOutlineWidth(node, fraction) {
   const surfaces = document.querySelectorAll(".doc-content.rh-has-outline");
   for (let i = 0; i < surfaces.length; i++) {
     if (surfaces[i].dataset.nodeId !== node.id) continue;
-    if (em == null) surfaces[i].style.removeProperty("--rh-outline-w");
-    else surfaces[i].style.setProperty("--rh-outline-w", em + "em");
+    if (fraction == null) surfaces[i].style.removeProperty("--rh-outline-w");
+    else surfaces[i].style.setProperty("--rh-outline-w", toPercent(fraction));
   }
 }
 
-function setOutlineWidth(node, em) {
+function setOutlineFraction(node, fraction) {
   const view = { ...(node.view || {}) };
-  if (em == null) delete view.outlineWidth;
-  else view.outlineWidth = em;
+  delete view.outlineWidth;
+  if (fraction == null) delete view.outlineFraction;
+  else view.outlineFraction = fraction;
   node.view = view;
-  applyOutlineWidth(node, em);
+  applyOutlineWidth(node, fraction);
 }
 
 function buildResizeHandle(dc, node) {
@@ -81,10 +93,7 @@ function buildResizeHandle(dc, node) {
   const commit = () => {
     if (!frozen) persistCanvasExtension(node);
   };
-  const currentEm = () => {
-    const fontPx = parseFloat(getComputedStyle(dc).fontSize) || 16;
-    return handle.parentElement.offsetWidth / fontPx;
-  };
+  const currentFraction = () => handle.parentElement.offsetWidth / contentWidth(dc);
 
   handle.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
@@ -92,9 +101,9 @@ function buildResizeHandle(dc, node) {
     e.stopPropagation();
     // Canvas cards sit under a zoom transform; pointer deltas are screen px.
     const scale = dc.offsetWidth ? dc.getBoundingClientRect().width / dc.offsetWidth || 1 : 1;
-    const fontPx = parseFloat(getComputedStyle(dc).fontSize) || 16;
     const startX = e.clientX;
-    const startEm = currentEm();
+    const startFraction = currentFraction();
+    const widthPx = contentWidth(dc);
     handle.classList.add("is-dragging");
     try {
       handle.setPointerCapture(e.pointerId);
@@ -102,7 +111,7 @@ function buildResizeHandle(dc, node) {
     const move = (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
-      setOutlineWidth(node, clampOutlineWidth(startEm + (ev.clientX - startX) / scale / fontPx));
+      setOutlineFraction(node, clampOutlineFraction(startFraction + (ev.clientX - startX) / scale / widthPx));
     };
     const done = (ev) => {
       if (ev) ev.stopPropagation();
@@ -122,15 +131,15 @@ function buildResizeHandle(dc, node) {
   handle.addEventListener("dblclick", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    setOutlineWidth(node, null);
+    setOutlineFraction(node, null);
     commit();
   });
   handle.addEventListener("keydown", (e) => {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
     e.preventDefault();
     e.stopPropagation();
-    const step = e.key === "ArrowRight" ? OUTLINE_KEY_STEP_EM : -OUTLINE_KEY_STEP_EM;
-    setOutlineWidth(node, clampOutlineWidth(currentEm() + step));
+    const step = e.key === "ArrowRight" ? OUTLINE_KEY_STEP : -OUTLINE_KEY_STEP;
+    setOutlineFraction(node, clampOutlineFraction(currentFraction() + step));
     commit();
   });
   return handle;
