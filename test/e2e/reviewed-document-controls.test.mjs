@@ -54,6 +54,18 @@ try {
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.locator(".card.root .rh-outline-pane").waitFor();
   assert.ok(Math.abs((await railWidth()) - widened) < 2, "outline width must persist across a reload");
+  const share = (scope) => page.locator(scope + " .doc-content.rh-has-outline").evaluate((dc) => {
+    const style = getComputedStyle(dc);
+    const inner = dc.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    return dc.querySelector(".rh-outline-pane").offsetWidth / inner;
+  });
+  const cardShare = await share(".card.root");
+  await page.evaluate(() => document.querySelector(".card.root [aria-label='Expand document']").click());
+  await page.locator(".reader-col .rh-outline-pane").waitFor();
+  const readerShare = await share(".reader-col");
+  assert.ok(Math.abs(cardShare - readerShare) < 0.01, `outline must keep its share of the width (card ${cardShare}, reader ${readerShare})`);
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => document.body.classList.contains("mode-canvas"));
   await page.locator(".card.root .rh-outline-resize").dblclick();
   assert.ok(Math.abs((await railWidth()) - before) < 2, "double-click must reset the outline width");
   console.log("ok outline resizes and resets");
