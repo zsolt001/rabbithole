@@ -216,7 +216,7 @@ body.mode-canvas #tb-restore-pill { display: none; }
 .crumb:hover { color: var(--fg-bold); }
 .crumb.current { color: var(--fg-bold); font-weight: var(--weight-semibold); cursor: default; }
 .crumb-sep { color: var(--fg-faint); flex-shrink: 0; }
-#reader-main { flex: 1; min-width: 0; min-height: 0; overflow: auto; padding: 40px 48px 28px; overscroll-behavior: contain; scrollbar-gutter: stable; }
+#reader-main { --reader-pad-top: 40px; flex: 1; min-width: 0; min-height: 0; overflow: auto; padding: var(--reader-pad-top) 48px 28px; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .reader-col { position: relative; max-width: var(--reader-column); margin: 0 auto; }
 /* A PDF is already a complete reading surface. In Reader, give it the whole
    flex slot between the shared top chrome and composer instead of stacking a
@@ -304,7 +304,7 @@ body.mode-canvas #tb-restore-pill { display: none; }
 @media (hover: none), (pointer: coarse), (max-width: 760px) {
   #reader { height: 100dvh; min-height: -webkit-fill-available; overflow: hidden; }
   .crumb { max-width: min(72vw, 280px); }
-  #reader-main { min-width: 0; overflow-x: hidden; overflow-y: auto; padding: 24px max(18px, env(safe-area-inset-right)) 28px max(18px, env(safe-area-inset-left));
+  #reader-main { --reader-pad-top: 24px; min-width: 0; overflow-x: hidden; overflow-y: auto; padding: var(--reader-pad-top) max(18px, env(safe-area-inset-right)) 28px max(18px, env(safe-area-inset-left));
     overscroll-behavior-y: contain; scrollbar-gutter: auto; touch-action: pan-y pinch-zoom; -webkit-overflow-scrolling: touch; }
   .reader-col { width: 100%; max-width: none; }
   #reader-rail, #margin-notes { display: none; }
@@ -1200,7 +1200,15 @@ body:not(.mode-canvas) #branch-undo { bottom: 84px; }
 .rh-pdf-convert-cancel:disabled { opacity: .55; cursor: default; }
 .doc-content.rh-has-outline { display: grid; grid-template-columns: var(--rh-outline-w) minmax(0, 1fr); column-gap: 1.75em; align-items: start; }
 .rh-doc-body { grid-column: 2; min-width: 0; }
-.rh-outline { grid-column: 1; position: sticky; top: 0.25em; align-self: start; max-height: calc(100vh - 1em); overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 0.15em; border-right: 1px solid var(--border); padding-right: 0.6em; }
+/* The pane is the sticky grid item; the nav scrolls inside it and the resize
+   handle sits on its right edge (the rail's divider line). */
+.rh-outline-pane { grid-column: 1; position: sticky; top: var(--rh-outline-top, 0.25em); align-self: start; min-width: 0; }
+.rh-outline { max-height: calc(100vh - var(--rh-outline-top, 0.25em) - 0.75em); overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 0.15em; border-right: 1px solid var(--border); padding-right: 0.6em; }
+.rh-outline-resize { position: absolute; top: 0; bottom: 0; right: -4px; width: 9px; cursor: col-resize; touch-action: none; }
+.rh-outline-resize::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 3px; border-radius: 2px; background: transparent; transition: background var(--duration-fast) var(--ease-standard); }
+.rh-outline-resize:hover::after, .rh-outline-resize.is-dragging::after { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+.rh-outline-resize:focus { outline: none; }
+.rh-outline-resize:focus-visible::after { background: var(--accent); }
 /* Expanded (reader) document: it earns more width than the reader's narrow
    reading measure (that measure stays for answer cards and notes). Base
    document width is 90% of the viewport; turning the outline on takes the full
@@ -1221,7 +1229,12 @@ body:not(.mode-canvas) #branch-undo { bottom: 84px; }
 .review-pill[data-mode="marked"] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 /* Reader control strip: the reviewed doc's switches, since the card head isn't
    reachable in the expanded view. Segmented mode switch + outline toggle. */
-.reader-review-strip { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 20px; font-family: var(--font-ui); }
+/* Sticky to the top of the reader's scrollport so the switch never scrolls
+   away; the outline pane sticks just below it (--rh-outline-top). Sticky
+   offsets start inside the scroller's padding, so the negative top lifts the
+   strip's opaque band over the reader's top padding instead of below it. */
+.reader-review-strip { position: sticky; top: calc(-1 * var(--reader-pad-top)); z-index: 2; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: var(--reader-strip-h); box-sizing: border-box; margin: 0 0 20px; padding: 8px 0; background: var(--bg); font-family: var(--font-ui); }
+.reader-col:has(> .reader-review-strip) { --rh-outline-top: calc(var(--reader-strip-h) - var(--reader-pad-top) + 0.5em); }
 .rrs-seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-control); overflow: hidden; }
 .rrs-seg-btn { appearance: none; border: none; border-right: 1px solid var(--border); background: transparent; color: var(--fg-dim); font-family: var(--font-ui); font-size: var(--text-ui); padding: 5px 11px; cursor: pointer; transition: var(--transition-color); }
 .rrs-seg-btn:last-child { border-right: none; }
