@@ -38,7 +38,9 @@ export function tidy(source) {
   const layout = layoutMode();
   const options = { childrenOf: placedChildren, effH: effH, sort: nodeOrder };
   const positions =
-    layout === "tree" ? tidyTree(root, options) : mindMapTree(root, { ...options, balanced: layout === "mindmap-balanced" });
+    layout === "tree"
+      ? tidyTree(root, options)
+      : mindMapTree(root, { ...options, balanced: layout === "mindmap-balanced" });
   // Only nodes actually visited (the live tree) are laid out.
   const ids = Object.keys(positions);
   const moved = [];

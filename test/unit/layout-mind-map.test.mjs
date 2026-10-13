@@ -72,3 +72,20 @@ const tall = mindMapTree(pair.root, { childrenOf: pairKids, effH: (n) => (n.id =
 assert.equal(tall.root.y, 0);
 assert.equal(tall.only.y, -160, "a taller child is centered against the root by measured height");
 console.log("ok mind-map layouts");
+
+// Balanced with a single-child trunk: the fan-out happens at the first branching node, the trunk stacks above it.
+const trunkTree = {
+  root: node("root", null, 0),
+  t: node("t", "root", 1),
+  x: node("x", "t", 2),
+  y: node("y", "t", 3),
+  z: node("z", "t", 4),
+};
+const trunkKids = (id) => Object.values(trunkTree).filter((candidate) => candidate.parent_id === id);
+const trunkPositions = mindMapTree(trunkTree.root, { childrenOf: trunkKids, balanced: true });
+const trunkNodes = Object.entries(trunkPositions).map(([id, position]) => ({ ...trunkTree[id], position }));
+noOverlaps(trunkNodes);
+assert.deepEqual(trunkPositions.root, { x: 0, y: 0 });
+assert.ok(trunkPositions.t.y > trunkPositions.root.y, "the trunk runs down to the branching node");
+const trunkSides = ["x", "y", "z"].map((id) => Math.sign(trunkPositions[id].x - trunkPositions.t.x));
+assert.ok(trunkSides.includes(1) && trunkSides.includes(-1), "the branching node's children use both sides");

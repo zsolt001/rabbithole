@@ -65,7 +65,7 @@ function contentWidth(dc) {
 
 // Every live surface of this node (card body and reader) follows the drag.
 function applyOutlineWidth(node, fraction) {
-  const surfaces = document.querySelectorAll(".doc-content.rh-has-outline");
+  const surfaces = /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(".doc-content.rh-has-outline"));
   for (let i = 0; i < surfaces.length; i++) {
     if (surfaces[i].dataset.nodeId !== node.id) continue;
     if (fraction == null) surfaces[i].style.removeProperty("--rh-outline-w");

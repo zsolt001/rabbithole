@@ -2,9 +2,9 @@ import { BUTTON_OPEN } from "../core/html/markup.js";
 import {
   AUTO_TIDY_GRACE_DEFAULT,
   AUTO_TIDY_GRACE_STOPS,
-  LAYOUT_MODES,
   autoTidyEnabled,
   autoTidyGraceSeconds,
+  LAYOUT_MODES,
   layoutMode,
   onPreferenceChange,
   setAutoTidyEnabled,

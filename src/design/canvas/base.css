@@ -1233,7 +1233,7 @@ body:not(.mode-canvas) #branch-undo { bottom: 84px; }
    away; the outline pane sticks just below it (--rh-outline-top). Sticky
    offsets start inside the scroller's padding, so the negative top lifts the
    strip's opaque band over the reader's top padding instead of below it. */
-.reader-review-strip { position: sticky; top: calc(-1 * var(--reader-pad-top)); z-index: 2; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: var(--reader-strip-h); box-sizing: border-box; margin: 0 0 20px; padding: 8px 0; background: var(--bg); font-family: var(--font-ui); }
+.reader-review-strip { position: sticky; top: calc(-1 * var(--reader-pad-top)); z-index: var(--layer-local-mid); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: var(--reader-strip-h); box-sizing: border-box; margin: 0 0 20px; padding: 8px 0; background: var(--bg); font-family: var(--font-ui); }
 .reader-col:has(> .reader-review-strip) { --rh-outline-top: calc(var(--reader-strip-h) - var(--reader-pad-top) + 0.5em); }
 .rrs-seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-control); overflow: hidden; }
 .rrs-seg-btn { appearance: none; border: none; border-right: 1px solid var(--border); background: transparent; color: var(--fg-dim); font-family: var(--font-ui); font-size: var(--text-ui); padding: 5px 11px; cursor: pointer; transition: var(--transition-color); }
@@ -1244,7 +1244,7 @@ body:not(.mode-canvas) #branch-undo { bottom: 84px; }
 .rrs-outline:hover { color: var(--fg-bold); border-color: var(--border-focus); }
 .rrs-outline.is-active { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .rrs-seg-btn:focus-visible, .rrs-outline:focus-visible { outline: var(--focus-ring); outline-offset: -2px; }
-.rh-outline-item { display: block; color: var(--fg-faint); text-decoration: none; font-family: var(--font-ui); font-size: 0.82em; line-height: 1.35; padding: 0.15em 0; border-radius: 3px; }
+.rh-outline-item { display: block; color: var(--fg-faint); text-decoration: none; font-family: var(--font-ui); font-size: var(--text-ui); line-height: 1.35; padding: 0.15em 0; border-radius: 3px; }
 .rh-outline-item:hover { color: var(--fg); }
 .rh-outline-item:focus-visible { color: var(--fg); outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 .rh-outline-l1 { font-weight: var(--weight-medium); }

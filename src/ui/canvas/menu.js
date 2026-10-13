@@ -94,7 +94,8 @@ export function openCardMenu(node, trigger, openedByKeyboard) {
   viewModeButton.style.display = reviewed ? "" : "none";
   outlineButton.style.display = outlinable ? "" : "none";
   if (reviewed) viewModeButton.querySelector(".sm-label").textContent = reviewModeLabel(node);
-  if (outlinable) outlineButton.querySelector(".sm-label").textContent = outlineOn(node) ? "Hide outline" : "Show outline";
+  if (outlinable)
+    outlineButton.querySelector(".sm-label").textContent = outlineOn(node) ? "Hide outline" : "Show outline";
   const pinButton = document.getElementById("cm-pin");
   const showPin = !frozen && canPinWindow(node);
   pinButton.style.display = showPin ? "" : "none";

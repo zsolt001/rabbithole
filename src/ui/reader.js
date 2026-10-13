@@ -5,6 +5,7 @@ import { deriveSubtreeWorkflow, deriveWorkflowStatus } from "../core/hole/workfl
 import { iconSvg } from "../core/html/icons.js";
 import { escapeHtml } from "../core/utils.js";
 import { presetLabelForOrigin } from "./ask-presets.js";
+import { buildReaderReviewStrip } from "./canvas/review-controls.js";
 import {
   breadcrumbEl,
   buildDocContent,
@@ -26,7 +27,6 @@ import { createModuleLifecycle } from "./kit/scope.js";
 import { flyReaderFromRect } from "./mode-transition.js";
 import { appendOriginAttachmentThumbnails, originAttachmentNames } from "./origin-attachments.js";
 import { buildOriginCrop } from "./origin-provenance.js";
-import { buildReaderReviewStrip } from "./canvas/review-controls.js";
 import { captureContentPosition, restoreContentPosition } from "./scroll-position.js";
 import { applyChildHighlights, transitionMarkGroups } from "./text-marks.js";
 import { mountVisuals } from "./visuals.js";

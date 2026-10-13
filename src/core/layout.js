@@ -282,8 +282,12 @@ export function mindMapTree(root, { childrenOf, effH = null, sort = nodeOrder, b
     placeBlock(kidsOf(node), dir > 0 ? x + w + TREE_PARENT_GAP : x - TREE_PARENT_GAP, top, extent(node), dir);
   }
 
-  if (balanced) {
-    const kids = kidsOf(root);
+  /**
+   * Fan a hub's children out on both sides: contiguous runs, the first filling the right until it holds half the total height.
+   * The hub's left edge sits at x = 0. @param {LayoutNode} hub
+   */
+  function placeBalanced(hub) {
+    const kids = kidsOf(hub);
     const total = kids.reduce((sum, kid) => sum + extent(kid), 0);
     const rightKids = [];
     const leftKids = [];
@@ -296,20 +300,51 @@ export function mindMapTree(root, { childrenOf, effH = null, sort = nodeOrder, b
         leftKids.push(kid);
       }
     }
-    const rootExtent = Math.max(heightOf(root), blockExtent(rightKids), blockExtent(leftKids));
-    extents.set(root.id, rootExtent);
-    const w = nodeW(root);
-    positions[root.id] = { x: 0, y: (rootExtent - heightOf(root)) / 2 };
-    placeBlock(rightKids, w + TREE_PARENT_GAP, 0, rootExtent, 1);
-    placeBlock(leftKids, -TREE_PARENT_GAP, 0, rootExtent, -1);
+    const hubExtent = Math.max(heightOf(hub), blockExtent(rightKids), blockExtent(leftKids));
+    extents.set(hub.id, hubExtent);
+    const w = nodeW(hub);
+    positions[hub.id] = { x: 0, y: (hubExtent - heightOf(hub)) / 2 };
+    placeBlock(rightKids, w + TREE_PARENT_GAP, 0, hubExtent, 1);
+    placeBlock(leftKids, -TREE_PARENT_GAP, 0, hubExtent, -1);
+  }
+
+  // A root with a single child (a trunk) has nothing to split, so the fan-out
+  // happens at the first node that branches; the trunk stacks above it.
+  let placed = false;
+  if (balanced) {
+    /** @type {LayoutNode[]} */
+    const trunk = [];
+    let cursor = root;
+    for (let kids = kidsOf(cursor); kids.length === 1; kids = kidsOf(cursor)) {
+      trunk.push(cursor);
+      cursor = /** @type {LayoutNode} */ (kids[0]);
+    }
+    if (kidsOf(cursor).length >= 2 && trunk.length) {
+      placeBalanced(cursor);
+      let y = /** @type {{ y: number }} */ (positions[cursor.id]).y;
+      const centerX = nodeW(cursor) / 2;
+      for (const ancestor of trunk.reverse()) {
+        y -= TREE_PARENT_GAP + heightOf(ancestor);
+        positions[ancestor.id] = { x: centerX - nodeW(ancestor) / 2, y };
+      }
+      placed = true;
+    }
+  }
+  if (placed) {
+    // The trunk and hub are already positioned.
+  } else if (balanced) {
+    placeBalanced(root);
   } else {
     place(root, 0, 0, 1);
   }
   // The explicit tidy contract roots the layout at the origin.
   const rootPosition = positions[root.id];
-  if (rootPosition && rootPosition.y !== 0) {
-    const dy = rootPosition.y;
-    for (const position of Object.values(positions)) position.y -= dy;
+  if (rootPosition && (rootPosition.x !== 0 || rootPosition.y !== 0)) {
+    const { x: dx, y: dy } = rootPosition;
+    for (const position of Object.values(positions)) {
+      position.x -= dx;
+      position.y -= dy;
+    }
   }
   return positions;
 }
