@@ -1,5 +1,5 @@
 import { isDockedNote } from "../../core/hole/ask.js";
-import { nodeOrder, tidyTree } from "../../core/layout.js";
+import { mindMapTree, nodeOrder, tidyTree } from "../../core/layout.js";
 import {
   canvasBuilt,
   canvasFramed,
@@ -15,6 +15,7 @@ import {
   setModeValue,
 } from "../core.js";
 import { flyReaderToRect } from "../mode-transition.js";
+import { layoutMode } from "../preferences.js";
 import { openNode } from "../reader.js";
 import { captureContentPosition, restoreContentPosition } from "../scroll-position.js";
 import { animateView, applyTransform, diveTargetView } from "./camera.js";
@@ -34,7 +35,10 @@ export function tidy(source) {
   discardAllCollapseStacks();
   const root = nodes[rootId];
   if (!root) return;
-  const positions = tidyTree(root, { childrenOf: placedChildren, effH: effH, sort: nodeOrder });
+  const layout = layoutMode();
+  const options = { childrenOf: placedChildren, effH: effH, sort: nodeOrder };
+  const positions =
+    layout === "tree" ? tidyTree(root, options) : mindMapTree(root, { ...options, balanced: layout === "mindmap-balanced" });
   // Only nodes actually visited (the live tree) are laid out.
   const ids = Object.keys(positions);
   const moved = [];

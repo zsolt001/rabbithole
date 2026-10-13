@@ -1,4 +1,4 @@
-import { isDockedNote, isEditableDocument, isNoteNode, isReactionNote, isReviewedDocument } from "../../core/hole/ask.js";
+import { isDockedNote, isNoteNode, isReactionNote, isReviewedDocument, supportsOutline } from "../../core/hole/ask.js";
 import { deriveWorkflowStatus } from "../../core/hole/workflow.js";
 import { iconButtonMarkup } from "../../core/html/markup.js";
 import { changeNodeFontScale, childrenOf, closed, frozen, resetNodeFontScale, rootId } from "../core.js";
@@ -90,11 +90,11 @@ export function openCardMenu(node, trigger, openedByKeyboard) {
   const reviewed = isReviewedDocument(node);
   const viewModeButton = document.getElementById("cm-viewmode");
   const outlineButton = document.getElementById("cm-outline");
-  const editable = isEditableDocument(node);
+  const outlinable = supportsOutline(node);
   viewModeButton.style.display = reviewed ? "" : "none";
-  outlineButton.style.display = editable ? "" : "none";
+  outlineButton.style.display = outlinable ? "" : "none";
   if (reviewed) viewModeButton.querySelector(".sm-label").textContent = reviewModeLabel(node);
-  if (editable) outlineButton.querySelector(".sm-label").textContent = outlineOn(node) ? "Hide outline" : "Show outline";
+  if (outlinable) outlineButton.querySelector(".sm-label").textContent = outlineOn(node) ? "Hide outline" : "Show outline";
   const pinButton = document.getElementById("cm-pin");
   const showPin = !frozen && canPinWindow(node);
   pinButton.style.display = showPin ? "" : "none";
