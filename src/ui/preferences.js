@@ -17,6 +17,7 @@ const THEME_KEY = "rh-theme";
 const READING_SCALE_KEY = "rh-reading-scale";
 const AUTO_TIDY_KEY = "rh-auto-tidy";
 const AUTO_TIDY_GRACE_KEY = "rh-auto-tidy-grace";
+const LAYOUT_KEY = "rh-layout";
 export const AI_IMAGES_PREF_KEY = "rh-ai-images";
 export const ASK_PRESETS_KEY = "rh-ask-presets-v1";
 export const REACTION_PROMPTS_KEY = "rh-reaction-prompts-v1";
@@ -26,12 +27,15 @@ export const READING_SCALE_MAX = 1.4;
 export const READING_SCALE_STEP = 0.1;
 export const AUTO_TIDY_GRACE_DEFAULT = 120;
 export const AUTO_TIDY_GRACE_STOPS = [30, 60, 120, 300, 600];
+export const LAYOUT_MODES = ["tree", "mindmap", "mindmap-balanced"];
+export const LAYOUT_DEFAULT = "tree";
 
 const listeners = [];
 let systemThemeMql = null;
 let readingScaleCache = null;
 let autoTidyEnabledCache = null;
 let autoTidyGraceCache = null;
+let layoutModeCache = null;
 let aiImagesEnabledCache = null;
 let swapFrame = 0;
 let askPresetsCache = null;
@@ -94,6 +98,7 @@ function resetDerivedCaches() {
   readingScaleCache = null;
   autoTidyEnabledCache = null;
   autoTidyGraceCache = null;
+  layoutModeCache = null;
   aiImagesEnabledCache = null;
   askPresetsCache = null;
   reactionPromptsCache = null;
@@ -121,6 +126,7 @@ function preferenceKind(key) {
   if (key === ASK_PRESETS_KEY) return "ask-presets";
   if (key === REACTION_PROMPTS_KEY) return "reaction-prompts";
   if (key === AUTO_TIDY_KEY || key === AUTO_TIDY_GRACE_KEY) return "auto-tidy";
+  if (key === LAYOUT_KEY) return "layout";
   if (key === AI_IMAGES_PREF_KEY) return "ai-images";
   return null;
 }
@@ -309,6 +315,26 @@ export function setAutoTidyGraceSeconds(value) {
   autoTidyGraceCache = next;
   writeStored(AUTO_TIDY_GRACE_KEY, String(next));
   notify("auto-tidy");
+  return next;
+}
+
+// ---------------------------------------------------------------- layout
+
+/** How Tidy arranges the canvas: "tree" (the default), "mindmap", or "mindmap-balanced". */
+export function layoutMode() {
+  if (layoutModeCache === null) {
+    const saved = readStored(LAYOUT_KEY);
+    layoutModeCache = LAYOUT_MODES.indexOf(saved) === -1 ? LAYOUT_DEFAULT : saved;
+  }
+  return layoutModeCache;
+}
+
+export function setLayoutMode(value) {
+  const next = LAYOUT_MODES.indexOf(value) === -1 ? LAYOUT_DEFAULT : value;
+  layoutModeCache = next;
+  if (next === LAYOUT_DEFAULT) removeStored(LAYOUT_KEY);
+  else writeStored(LAYOUT_KEY, next);
+  notify("layout");
   return next;
 }
 

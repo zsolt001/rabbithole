@@ -1,5 +1,5 @@
 import { systemClock } from "../core/clock.js";
-import { isEditableDocument, isNoteNode, isReviewedDocument } from "../core/hole/ask.js";
+import { hasDocumentLayout, isNoteNode, isReviewedDocument, supportsOutline } from "../core/hole/ask.js";
 import { BUNNY_MARK_SVG } from "../core/html/icons.js";
 import { shortId } from "../core/utils.js";
 import { mountCodeCopy } from "./code-copy.js";
@@ -592,6 +592,7 @@ export function buildDocContent(node, base) {
     else dc.appendChild(buildLoading(node));
   } else {
     if (isNoteNode(node) && !node.source) {
+      dc.classList.add("rh-document");
       const noteDocument = mountStructuredNote(dc, {
         markdown: node.markdown || "",
         html: node.html || "",
@@ -627,9 +628,8 @@ export function buildDocContent(node, base) {
       node._contentDisposers.add(dispose);
       dc._rhDispose = dispose;
     } else {
-      const editable = isEditableDocument(node);
       const reviewed = isReviewedDocument(node);
-      dc.classList.toggle("rh-document", editable);
+      dc.classList.toggle("rh-document", hasDocumentLayout(node));
       if (reviewed) {
         const mode = (node.view && node.view.reviewMode) || "marked";
         dc.classList.add("rh-reviewed");
@@ -653,7 +653,7 @@ export function buildDocContent(node, base) {
         dc.prepend(buildConvertProgress(node, pdfExt, committed));
       }
       mountDocMedia(dc, node, base);
-      if (editable && node.view && node.view.outline) {
+      if (supportsOutline(node) && node.view && node.view.outline) {
         const rail = coreHooks.buildOutlineRail ? coreHooks.buildOutlineRail(dc, node) : null;
         if (rail) {
           dc.classList.add("rh-has-outline");

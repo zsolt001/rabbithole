@@ -1,14 +1,14 @@
-import { isEditableDocument, isReviewedDocument } from "../../core/hole/ask.js";
+import { isReviewedDocument, supportsOutline } from "../../core/hole/ask.js";
 import { currentNodeId, frozen, mode, nodes, readerMain } from "../core.js";
 import { renderReaderBody } from "../reader.js";
 import { fillBody } from "./document.js";
 import { persistCanvasExtension } from "./pins.js";
 
 /*
- * Review-view state (redline mode + outline) for a document, shared by the
- * three surfaces that switch it: the card-head pill, the reader strip, and the
- * card menu. The outline is offered on any editable document; the redline mode
- * only once it has been edited. Each mutator persists node.view and refreshes whatever surfaces
+ * Review-view state (redline mode + outline) for a node, shared by the three
+ * surfaces that switch it: the card-head pill, the reader strip, and the card
+ * menu. The outline is offered on any node with rendered headings; the redline
+ * mode only once a document has been edited. Each mutator persists node.view and refreshes whatever surfaces
  * are live, so the pill, the reader controls, and the menu labels never disagree.
  */
 
@@ -91,7 +91,7 @@ export function syncReviewPill(node) {
 // --- Reader control strip --------------------------------------------------
 
 export function buildReaderReviewStrip(node) {
-  if (!isEditableDocument(node)) return null;
+  if (!supportsOutline(node)) return null;
   const strip = document.createElement("div");
   strip.className = "reader-review-strip";
   if (isReviewedDocument(node)) strip.appendChild(buildModeSwitch(node));

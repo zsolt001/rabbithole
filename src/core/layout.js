@@ -232,6 +232,88 @@ export function tidyTree(root, { childrenOf, effH = null, sort = nodeOrder }) {
   return positions;
 }
 
+/**
+ * Mind-map layout, the alternative to tidyTree's selections-right/follow-ups-
+ * below grammar. Branch type is ignored: every child fans out horizontally from
+ * its parent, siblings stack in order, and a parent is centered against the
+ * block of its children. Each subtree reserves its own vertical band, so bands
+ * never overlap whatever the depth. With `balanced`, the root's children split
+ * across both sides (first half right, rest left) and the left side mirrors,
+ * growing outward.
+ * @param {LayoutNode} root
+ * @param {{ childrenOf: ChildrenOf, effH?: EffectiveHeight | null, sort?: typeof nodeOrder, balanced?: boolean }} options
+ */
+export function mindMapTree(root, { childrenOf, effH = null, sort = nodeOrder, balanced = false }) {
+  /** @type {Record<string, { x: number, y: number }>} */
+  const positions = {};
+  /** @type {Map<string, number>} */
+  const extents = new Map();
+  /** @param {LayoutNode} node */
+  const heightOf = (node) => (typeof effH === "function" ? effH(node) : nodeH(node));
+  /** @param {LayoutNode} node */
+  const kidsOf = (node) => childrenOf(node.id).slice().sort(sort);
+  /** @param {LayoutNode[]} siblings */
+  function blockExtent(siblings) {
+    if (!siblings.length) return 0;
+    return siblings.reduce((sum, sibling) => sum + extent(sibling), 0) + TREE_STACK_GAP * (siblings.length - 1);
+  }
+  /** Vertical band a subtree needs: its own card or its children's block, whichever is taller. @param {LayoutNode} node @returns {number} */
+  function extent(node) {
+    let known = extents.get(node.id);
+    if (known === undefined) {
+      known = Math.max(heightOf(node), blockExtent(kidsOf(node)));
+      extents.set(node.id, known);
+    }
+    return known;
+  }
+  /** @param {LayoutNode[]} siblings @param {number} anchorX @param {number} top @param {number} totalExtent @param {1 | -1} dir */
+  function placeBlock(siblings, anchorX, top, totalExtent, dir) {
+    let cursor = top + (totalExtent - blockExtent(siblings)) / 2;
+    for (const sibling of siblings) {
+      place(sibling, anchorX, cursor, dir);
+      cursor += extent(sibling) + TREE_STACK_GAP;
+    }
+  }
+  /** anchorX is the card's near edge: its left edge going right, its right edge going left. @param {LayoutNode} node @param {number} anchorX @param {number} top @param {1 | -1} dir */
+  function place(node, anchorX, top, dir) {
+    const w = nodeW(node);
+    const x = dir > 0 ? anchorX : anchorX - w;
+    positions[node.id] = { x, y: top + (extent(node) - heightOf(node)) / 2 };
+    placeBlock(kidsOf(node), dir > 0 ? x + w + TREE_PARENT_GAP : x - TREE_PARENT_GAP, top, extent(node), dir);
+  }
+
+  if (balanced) {
+    const kids = kidsOf(root);
+    const total = kids.reduce((sum, kid) => sum + extent(kid), 0);
+    const rightKids = [];
+    const leftKids = [];
+    let rightSum = 0;
+    for (const kid of kids) {
+      if (rightSum < total / 2) {
+        rightKids.push(kid);
+        rightSum += extent(kid);
+      } else {
+        leftKids.push(kid);
+      }
+    }
+    const rootExtent = Math.max(heightOf(root), blockExtent(rightKids), blockExtent(leftKids));
+    extents.set(root.id, rootExtent);
+    const w = nodeW(root);
+    positions[root.id] = { x: 0, y: (rootExtent - heightOf(root)) / 2 };
+    placeBlock(rightKids, w + TREE_PARENT_GAP, 0, rootExtent, 1);
+    placeBlock(leftKids, -TREE_PARENT_GAP, 0, rootExtent, -1);
+  } else {
+    place(root, 0, 0, 1);
+  }
+  // The explicit tidy contract roots the layout at the origin.
+  const rootPosition = positions[root.id];
+  if (rootPosition && rootPosition.y !== 0) {
+    const dy = rootPosition.y;
+    for (const position of Object.values(positions)) position.y -= dy;
+  }
+  return positions;
+}
+
 /** @param {number[]} a @param {number[]} b */
 function compareNumberKeys(a, b) {
   for (let i = 0; i < a.length; i++) {

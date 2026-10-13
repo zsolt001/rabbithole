@@ -3475,7 +3475,7 @@ async function verifyCardMenu() {
     await frozenMenu.waitFor({ state: "visible" });
     assert.equal(await frozenMenu.locator(".cm-size-label").innerText(), "Text size");
     assert.deepEqual(await frozenMenu.locator('[role="menuitem"]:visible').evaluateAll((items) => items.map((item) => item.id)),
-      ["cm-textdown", "cm-textreset", "cm-textup", "cm-copy", "cm-collapse", "cm-collapse-branch", "cm-collapse-children"],
+      ["cm-textdown", "cm-textreset", "cm-textup", "cm-copy", "cm-outline", "cm-collapse", "cm-collapse-branch", "cm-collapse-children"],
       "a frozen card menu keeps the ways of looking — the whole fold group included — and drops the ways of changing");
     await frozenPage.close();
 

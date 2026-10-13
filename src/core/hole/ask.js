@@ -35,13 +35,29 @@ export function isReviewedDocument(node) {
 
 /*
  * A markdown document update_document may target: not a note, not a PDF, not
- * an answer card. It earns the document reading layout (outline, wider
- * measure) before its first edit; isReviewedDocument adds the review modes.
+ * an answer card. isReviewedDocument marks the ones already edited, which get
+ * the review modes on top of the shared reading layout (hasDocumentLayout).
  */
 /** @param {Record<string, any> | null | undefined} node */
 export function isEditableDocument(node) {
   if (!node || isNoteNode(node) || node.source) return false;
   return !(node.origin && typeof node.origin === "object" && node.origin.question);
+}
+
+/*
+ * Reading layout is about how a node renders, not what update_document may
+ * edit: everything rendered as markdown (documents, answer cards, notes) gets
+ * the wide reader column; PDFs keep their own viewport. The outline needs
+ * rendered headings, so notes (an editor surface) are left out of it.
+ */
+/** @param {Record<string, any> | null | undefined} node */
+export function hasDocumentLayout(node) {
+  return !!node && !node.source;
+}
+
+/** @param {Record<string, any> | null | undefined} node */
+export function supportsOutline(node) {
+  return hasDocumentLayout(node) && !isNoteNode(node);
 }
 
 /** @param {{ origin?: unknown, parent_id?: unknown, view?: any, extensions?: any } | null | undefined} node */
